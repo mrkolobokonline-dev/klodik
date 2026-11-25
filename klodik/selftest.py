@@ -517,7 +517,7 @@ def selftest():
     win = p.open_settings() or p.settings_win
     assert win.winfo_exists()
     win.destroy()
-    assert update.ver("v1.7.0") > update.ver(update.VERSION) and update.repo()   # без сети: GitHub проверяю отдельно
+    assert update.ver("v99.0.0") > update.ver(update.VERSION) and update.repo()   # без сети: GitHub проверяю отдельно
     if os.path.exists(pet_pc.MODES):
         os.remove(pet_pc.MODES)
     asked.clear()

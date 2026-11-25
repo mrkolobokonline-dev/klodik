@@ -1,8 +1,8 @@
-"""Автообновление Klodik.exe с GitHub Releases. Адрес — в UPDATE_REPO (или %APPDATA%\\Klodik\\update.json:
+﻿"""Автообновление Klodik.exe с GitHub Releases. Адрес — в UPDATE_REPO (или %APPDATA%\\Klodik\\update.json:
 {"repo": "имя/репозиторий"}). Пока он пустой — обновления выключены."""
 from .common import *  # noqa: F401,F403
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 UPDATE_REPO = "mrkolobokonline-dev/klodik"           # отсюда (Releases) Клодики друзей берут новые версии
 
 
