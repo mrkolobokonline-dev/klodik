@@ -44,6 +44,9 @@ def selftest():
     from . import pet_soul
     from .pet_soul import idle_seconds
     pet_soul.SOUL = os.path.join(tmp_dir, "soul.json")
+    from . import pet_desk
+    for n in ("CLIPS", "STICKERS", "TRACK", "PROJECTS", "IDEAS", "GUARD"):
+        setattr(pet_desk, n, os.path.join(tmp_dir, n.lower() + ".json"))
     pet_brain.WEEKLY = os.path.join(tmp_dir, "weekly")
     pet_brain.PLUGINS = os.path.join(tmp_dir, "plugins")
     upd.OK_FLAG = os.path.join(tmp_dir, "update_ok.flag")
@@ -685,6 +688,52 @@ def selftest():
     p.soul_window().destroy()
     p.soul_tick(10)
     assert os.path.exists(pet_soul.SOUL)
+    # этап 5: дела, окна, файлы, свет
+    assert pet_desk.grid(4, (0, 0, 1000, 800)) == [(0, 0, 500, 400), (500, 0, 500, 400), (0, 400, 500, 400), (500, 400, 500, 400)]
+    assert pet_desk.SECRET.search("Qwerty12345") and pet_desk.SECRET.search("4149 4993 1234 5678")
+    assert not pet_desk.SECRET.search("купить хлеб и молоко")
+    dl = os.path.join(tmp_dir, "dl")
+    os.makedirs(dl, exist_ok=True)
+    for f in ("a.jpg", "b.zip", "c.pdf", "d.xyz"):
+        open(os.path.join(dl, f), "w").close()
+    sp = pet_desk.sort_plan(dl)
+    assert sorted(os.path.basename(os.path.dirname(b)) for _, b in sp) == ["Архивы", "Документы", "Фото"]
+    ac, pct, mins = pet_desk.power_status()
+    assert isinstance(ac, bool)
+    p.pomodoro()
+    assert p.prefs["working"] and p.pomo["phase"] == "work"
+    p.pomo["end"] = 0
+    p.pomo_tick()
+    assert p.pomo["phase"] == "break" and not p.prefs["working"]
+    p.send("помодоро стоп")
+    assert p.pomo is None
+    p.send("стикер купить корм коту")
+    assert p.stickers and pet_desk.read_json(pet_desk.STICKERS, [])[0]["t"] == "купить корм коту"
+    p.stickers[0]["w"].destroy(); p.stickers.clear()
+    p.track = {}
+    p.prefs.setdefault("off", [])
+    p.track[__import__("datetime").date.today().isoformat()] = {"Code": 3700, "Steam": 600}
+    assert p.track_report().startswith("Code — 1 ч 1 мин")
+    p.send("добавь проект Парковка бот")
+    assert p.projects[-1]["name"] == "парковка бот" or p.projects[-1]["name"].lower() == "парковка бот"
+    p.projects[-1]["last"] = (__import__("datetime").date.today() - __import__("datetime").timedelta(days=1)).isoformat()
+    assert "продолжим" in p.yesterday_project()
+    for cmd in ("разложи окна", "закрепи окно поверх всех", "кто открыл порты", "что зависло", "пинг", "сожми видео",
+                "разбери загрузки", "что это за ошибка", "погода", "какой курс доллара", "проверь ботов", "на добраніч",
+                "история буфера"):
+        assert p.desk_command(cmd), cmd
+    assert p.desk_command("покажи курсор") is None
+    p.on_battery = False
+    pet_desk.power_status, real_ps = (lambda: (False, 40, 50)), pet_desk.power_status
+    p.power_tick()
+    assert p.on_battery and p.prefs["anim"] == "min" and "свет" in p.bubble.l.cget("text")
+    pet_desk.power_status = lambda: (True, 100, None)
+    p.power_tick()
+    assert not p.on_battery and p.prefs["anim"] != "min"
+    pet_desk.power_status = real_ps
+    p.guard_tick(); p.guard_tick()
+    p.clips_window().destroy()
+    p.desk_tick(10)
     # игра на весь экран: прячется и дальше работает; ошибка в кадре не роняет
     p.fullscreen_app = lambda: True
     run(1.5)

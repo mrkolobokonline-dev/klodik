@@ -62,6 +62,8 @@ class PetWorld:
         me.add_command(label="Сохранить копию всех данных", command=s.export_data)
         m.add_cascade(label=f"Обо мне{', ' + s.addr() if s.addr() else ''}", menu=me)
         m.add_command(label=f"Список дел ({len(s.notes)})", command=s.notes_window)
+        m.add_command(label="История буфера…", command=s.clips_window)
+        m.add_command(label="Помодоро: стоп" if s.pomo else "Помодоро 25/5", command=lambda: s.pomodoro(stop=bool(s.pomo)))
         m.add_command(label="Покормить", command=s.feed)
         m.add_command(label="Убрать мячик" if s.ball else "Мячик", command=s.toggle_ball)
         m.add_command(label="Прогнать друга" if s.buddy else "Позвать друга",

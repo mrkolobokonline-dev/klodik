@@ -25,10 +25,11 @@ from .pet_brain import PetBrain
 from .anim import EMO, Emotions, micro
 from .ai import AI, parse_json
 from .pet_soul import PetSoul
+from .pet_desk import PetDesk
 
 
 # ---------- сам Клодик ----------
-class Pet(PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
+class Pet(PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
           PetWorld, PetTalk, PetActions):
     def __init__(s, root, claude=None, fx=None, windows=list_windows, plats=platforms, frame=frame_rect):
         s.root, s.claude, s.fx, s.windows = root, claude or s.think, fx or Effects(), windows
@@ -79,6 +80,7 @@ class Pet(PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun,
         s.scenes_load()
         s.brain_load()
         s.soul_load()
+        s.desk_load()
         s.onboard_load()                                   # первый запуск — знакомство
         s.hat_var, s.snow_var = tk.StringVar(value=s.hat), tk.StringVar(value=s.snow_mode)
         s.brain_var = tk.StringVar(value=s.brain)
@@ -216,6 +218,7 @@ class Pet(PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun,
         if s.every("poll", 2):
             s.stats.poll()
             s.check_pc()
+            s.clip_tick()
         if s.every("slow", 10):
             threading.Thread(target=s.stats.poll_slow, daemon=True).start()
         if s.every("minute", 60):
@@ -241,6 +244,9 @@ class Pet(PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun,
             s.ambient_emotions()
             s.daily_scene()
             s.soul_tick(10)
+            s.desk_tick(10)
+        if s.every("palette", 0.08):
+            s.palette_tick()
         if s.every("wake", 0.25):
             s.sleep_wake()
         s.door_tick(dt)
@@ -275,6 +281,11 @@ class Pet(PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun,
                 s.local_command(text)
             elif kind == "plugin_draft":
                 s.plugin_draft(text)
+            elif kind == "info_say":
+                s.say(text, 10, speak=True)
+            elif kind == "bots":
+                s.emote("joy" if text.startswith("Все") else "fear", "medium")
+                s.say(text, 12, speak=True)
             elif kind == "thought":
                 s.show_thought(text)
             elif kind == "fact":
