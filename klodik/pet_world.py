@@ -58,6 +58,7 @@ class PetWorld:
         me.add_command(label="Что ты обо мне знаешь…", command=s.recall_window)
         me.add_command(label="Импорт памяти…", command=s.memory_import_window)
         me.add_command(label="Экспорт памяти", command=s.memory_export)
+        me.add_command(label="Душа Клодика (характер, дневник, сны)…", command=s.soul_window)
         me.add_command(label="Сохранить копию всех данных", command=s.export_data)
         m.add_cascade(label=f"Обо мне{', ' + s.addr() if s.addr() else ''}", menu=me)
         m.add_command(label=f"Список дел ({len(s.notes)})", command=s.notes_window)

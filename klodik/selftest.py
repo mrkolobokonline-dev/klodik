@@ -41,6 +41,9 @@ def selftest():
     for mod, names in ((pet_brain, ("RULES", "KB")), (ai_mod, ("CACHE", "USAGE"))):
         for n in names:
             setattr(mod, n, os.path.join(tmp_dir, n.lower() + ".json"))
+    from . import pet_soul
+    from .pet_soul import idle_seconds
+    pet_soul.SOUL = os.path.join(tmp_dir, "soul.json")
     pet_brain.WEEKLY = os.path.join(tmp_dir, "weekly")
     pet_brain.PLUGINS = os.path.join(tmp_dir, "plugins")
     upd.OK_FLAG = os.path.join(tmp_dir, "update_ok.flag")
@@ -643,6 +646,45 @@ def selftest():
         assert os.path.exists(exe) and all(os.path.exists(x) for x in links.values()), os.listdir(os.path.join(tmp, "links"))
         make_icon(os.path.join(tmp, "k.ico"))
         assert os.path.getsize(os.path.join(tmp, "k.ico")) > 500
+    # живой Клодик: настроение, границы, душа, сны, встреча, день рождения
+    p.soul["mood"]["boredom"] = 0.9
+    assert p.dominant() == ("boredom", "strong")
+    p.mood_drift(3600)
+    assert p.soul["mood"]["boredom"] < 0.05 and abs(p.soul["mood"]["interest"] - 0.4) < 0.01
+    p.send("ты живой?")
+    assert "программа" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    n = len(p.soul["diary"])
+    assert p.on_user_text("мне сегодня хреново") == "support"
+    p.write_diary("тест")
+    assert len(p.soul["diary"]) == n                       # в плохой день — без записей
+    p.bad_day = -9999
+    p.write_diary("тест")
+    assert p.soul["diary"][-1]["t"] == "тест"
+    p.pending_q = ("цвет", p.clock)
+    p.on_user_text("зелёный")
+    assert p.soul["favorites"]["цвет"] == "зелёный"
+    p.soul["dreams"].append({"d": __import__("datetime").date.today().isoformat(), "t": "летал на печеньке"})
+    p.send("что тебе снилось")
+    assert "печеньке" in p.bubble.l.cget("text")
+    p.soul["xp"], lvl = 99 * p.soul["level"] + 99, p.soul["level"]
+    p.gain(5)
+    assert p.soul["level"] == lvl + 1
+    p.welcome_back(7 * 3600, ["книжку читал"])
+    assert "Давно не виделись" in p.bubble.l.cget("text") and "книжку" in p.bubble.l.cget("text")
+    born = __import__("datetime").date.today().replace(year=__import__("datetime").date.today().year - 1)
+    p.soul["born"], p.soul["rituals"] = born.isoformat(), {}
+    p.rituals()
+    assert p.carry and p.carry[0] == "cake" and "день рождения" in p.bubble.l.cget("text")
+    p.carry = None
+    p.prefs["no_emotions"] = True
+    n = len(p.soul["diary"])
+    p.write_diary("нельзя")
+    assert len(p.soul["diary"]) == n
+    p.prefs["no_emotions"] = False
+    assert isinstance(idle_seconds(), float)
+    p.soul_window().destroy()
+    p.soul_tick(10)
+    assert os.path.exists(pet_soul.SOUL)
     # игра на весь экран: прячется и дальше работает; ошибка в кадре не роняет
     p.fullscreen_app = lambda: True
     run(1.5)

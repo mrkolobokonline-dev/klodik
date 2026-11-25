@@ -236,6 +236,8 @@ class PetSmart:
                          + (f" — {r['text']}." if r["text"] else "."))
         if s.notes:
             parts.append(f"В списке дел {len(s.notes)}: {', '.join(s.notes[:3])}{'…' if len(s.notes) > 3 else ''}.")
+        if s.alive() and s.last_dream():
+            parts.append(f"А мне снилось: {s.last_dream()}")
         diary = read_json(DIARY, [])
         if diary:
             y = diary[-1]

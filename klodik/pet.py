@@ -24,10 +24,11 @@ from .pet_scenes import PetScenes
 from .pet_brain import PetBrain
 from .anim import EMO, Emotions, micro
 from .ai import AI, parse_json
+from .pet_soul import PetSoul
 
 
 # ---------- сам Клодик ----------
-class Pet(PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
+class Pet(PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
           PetWorld, PetTalk, PetActions):
     def __init__(s, root, claude=None, fx=None, windows=list_windows, plats=platforms, frame=frame_rect):
         s.root, s.claude, s.fx, s.windows = root, claude or s.think, fx or Effects(), windows
@@ -77,6 +78,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, P
         s.level_var = tk.StringVar(value=s.access_level)
         s.scenes_load()
         s.brain_load()
+        s.soul_load()
         s.onboard_load()                                   # первый запуск — знакомство
         s.hat_var, s.snow_var = tk.StringVar(value=s.hat), tk.StringVar(value=s.snow_mode)
         s.brain_var = tk.StringVar(value=s.brain)
@@ -238,6 +240,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, P
             s.game_watch()
             s.ambient_emotions()
             s.daily_scene()
+            s.soul_tick(10)
         if s.every("wake", 0.25):
             s.sleep_wake()
         s.door_tick(dt)
@@ -272,6 +275,8 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, P
                 s.local_command(text)
             elif kind == "plugin_draft":
                 s.plugin_draft(text)
+            elif kind == "thought":
+                s.show_thought(text)
             elif kind == "fact":
                 s.remember(text, quiet=True)
             elif kind in ("clip_copy", "clip_say"):
@@ -586,6 +591,11 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, P
                 px(10, 1, 3, 1, "#6f4e37" if thing == "coffee" else "#7a8f3a")
                 if int(t * 3) % 2:
                     px(11, -1, 1, 1, "#d0d0d0")          # пар
+            elif thing == "book":                          # раскрытая книжка
+                px(5, 3, 3, 3, "#3d6fb6"); px(8, 3, 3, 3, "#3d6fb6"); px(6, 3, 2, 2, "#f4f4f4"); px(8, 3, 2, 2, "#f4f4f4")
+            elif thing == "cake":                          # тортик со свечкой
+                px(5, top + 2, 6, 3, "#f0c8d8"); px(5, top + 2, 6, 1, "#ffffff"); px(8, top, 1, 2, "#4c8fd9")
+                px(8, top - 1, 1, 1, "#ffcc33" if int(t * 4) % 2 else "#ff8833")
             elif thing == "brush":                         # зубная щётка у рта + пена
                 px(9, 4 + int(t * 6) % 2, 5, 1, "#4c8fd9"); px(8, 4, 1, 1, "#ffffff"); px(7, 5, 1, 1, "#ffffff")
             elif thing == "mic":

@@ -102,6 +102,8 @@ class PetTalk:
                 local.append(lambda: s.set_listen(False))
             elif re.search(r"слушай меня|(?:включи|вруби)\s+(?:микрофон|уши)", seg):
                 local.append(lambda: s.set_listen(True))
+            elif fn := s.soul_command(seg):                     # душа, сны, «ты живой?», настроение
+                local.append(fn)
             elif fn := s.scene_command(seg):                    # «переоденься» — уйти в дверь и выйти в новой шапке
                 local.append(fn)
             elif fn := s.fun_command(seg):                      # мини-игры, характер, танцы, «сколько играл»
@@ -225,6 +227,9 @@ class PetTalk:
         if TASK_WORDS.match(text.strip()) and s.brain != "none":   # задача на компе — план инструментами, а не болтовня
             return s.plan_task(text)
         s.day_note("chat", "")
+        if s.on_user_text(text) == "support":                 # плохой день: тепло и просто, ничего не запоминаю
+            return s.ask_ai(text + "\n(Владельцу сейчас плохо. Поддержи тепло, коротко и просто, без лекций, "
+                                   "советов «возьми себя в руки» и без вопросов о причинах.)", remember=False)
         s.learn_facts(text)                                   # тихо запомню, если ты рассказал что-то о себе
         s.ask_ai(text)
 

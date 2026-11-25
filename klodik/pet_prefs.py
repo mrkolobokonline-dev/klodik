@@ -11,11 +11,12 @@ FEATURES = {
     "eyes": ("Следить глазами за курсором", True), "morning": ("Утренняя сводка", True),
     "diary": ("Итоги дня и ночное самообучение", True), "learn_facts": ("Запоминать факты о тебе из болтовни", True),
     "game_talk": ("Комментировать игры и напоминать про дейлики", True), "updates": ("Автообновление", True),
+    "thoughts": ("Мысли вслух и вопросы обо мне", True), "rituals": ("Ритуалы (спокойной ночи, праздники)", True),
 }
 BACKUP_DIR = os.path.join(DATA_DIR, "backup")
 BACKUP_FILES = ("state.json", "memory.json", "learned.json", "reminders.json", "notes.json", "modes.json", "diary.json",
                 "day.json", "phrases.json", "voice_profile.json", "policy.json", "onboarding.json", "journal.jsonl",
-                "apps_cache.json")
+                "apps_cache.json", "soul.json")
 
 
 def make_backup(dst):
