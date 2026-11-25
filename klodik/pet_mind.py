@@ -329,14 +329,21 @@ class PetMind:
 
     @property
     def busy(s):
-        return bool(s.thinking or s.job or s.jobs or s.dz or s.state in ("photo", "alarm", "dozer", "dozer_out"))
+        return bool(s.thinking or s.job or s.jobs or s.dz or s.state in ("photo", "alarm", "dozer", "dozer_out", "door"))
 
     def hat_now(s):
         if s.hat != "auto":
             return s.hat
         if is_night():
             return "nightcap"
-        return "winter" if time.localtime().tm_mon in (12, 1, 2) else "none"
+        if 21 <= time.localtime().tm_hour < 23:
+            return "pajama"                                # вечером — в пижамном колпаке
+        m, d = time.localtime().tm_mon, time.localtime().tm_mday
+        if (m == 12 and d >= 20) or (m == 1 and d <= 7):
+            return "santa"                                 # праздники
+        if m == 10 and d >= 25 or (m == 11 and d == 1):
+            return "pumpkin"                               # Хэллоуин
+        return "winter" if m in (12, 1, 2) else "none"
 
     def set_hat(s, hat):
         s.push_undo("шапка", lambda p=s.hat: s.set_hat(p))
@@ -344,7 +351,10 @@ class PetMind:
         s.hat_var.set(hat)
         s.key = None
         s.save()
-        s.say({"none": "Снял!", "auto": "Буду одеваться по погоде"}.get(hat, f"{HATS[hat]} — как я тебе?"), 2)
+        label = HATS.get(hat) or hat.replace("skin:", "скин ")
+        s.say({"none": "Снял!", "auto": "Буду одеваться по погоде"}.get(hat, f"{label} — как я тебе?"), 2)
+        if hat not in ("none", "auto"):
+            s.emote("pride", "light")
 
     def set_snow(s, mode):
         s.push_undo("снег", lambda p=s.snow_mode: s.set_snow(p))

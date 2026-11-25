@@ -85,6 +85,7 @@ class PetActions:
             s.x, s.y, s.vy = float(s.R - W - 60), float(s.T + 40), 0.0
             word = "окно" if n % 10 == 1 and n % 100 != 11 else "окна" if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else "окон"
             s.say(f"Чисто! {'Закрыл' if closed else 'Свернул'} {n} {word}", 4)
+            s.emote("pride", "medium")
 
     # --- действия ---
     def icon_for(s, app):

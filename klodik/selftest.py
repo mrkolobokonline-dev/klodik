@@ -15,6 +15,8 @@ from .tasks import calc, parse_when
 
 def selftest():
     common.STATE = os.path.join(HERE, "state.selftest.json")
+    if os.path.exists(common.STATE):                             # хвосты прошлого упавшего прогона
+        os.remove(common.STATE)
     voice.ERRLOG = os.path.join(os.environ.get("TEMP", HERE), "klodik_selftest_errors.log")
     voice.PROFILE = os.path.join(os.environ.get("TEMP", HERE), "klodik_selftest_profile.json")
     voice.WAKE_EXTRA.clear()
@@ -82,6 +84,7 @@ def selftest():
     p.start_apps = [("Тестапп", "shell:AppsFolder\\X!y"), ("Steam", "shell:AppsFolder\\S!s")]
     p.apps = []
     p.now = lambda: t0 + p.clock                                 # время Клодика = виртуальные часы теста
+    p.fullscreen_app = lambda: False                             # не зависеть от того, что сейчас на экране у владельца
     assert [r["text"] for r in p.reminders] == ["потом"], p.reminders   # пропущенное убрано и будет сказано
     run = lambda sec: [p.update(1 / 144) for _ in range(int(sec * 144))]
 
@@ -91,7 +94,9 @@ def selftest():
             run(0.1)
             if not p.busy:
                 return
-        raise AssertionError(f"завис в {p.state}: thinking={p.thinking} job={p.job} jobs={p.jobs} dz={bool(p.dz)}")
+        raise AssertionError(f"завис в {p.state}: thinking={p.thinking} job={p.job} jobs={len(p.jobs)} dz={bool(p.dz)} "
+                             f"phase={p.job_phase} x={p.x:.0f} y={p.y:.0f} vy={p.vy:.0f} vx={p.vx} ground={p.ground} "
+                             f"surface={p.surface} door={p.door_plan} pose={p.pose}")
 
     for st in ("walk", "idle", "sleep", "eat", "chase"):
         p.state, p.timer = st, 0.3
@@ -278,6 +283,7 @@ def selftest():
         btns = {b.cget("text"): b for b in p.ob_btns.winfo_children()}
         if "Дальше" in btns:                                     # шаг «имя»
             ents = [e for e in p.ob_body.winfo_children() if isinstance(e, tk.Entry)]
+            ents[0].delete(0, "end")
             ents[0].insert(0, "Олексій")
             btns["Дальше"].invoke()
             continue
@@ -305,6 +311,54 @@ def selftest():
     upd.mark_alive()
     assert os.path.exists(upd.OK_FLAG)
     p.memory_import_window(facts).destroy()
+    # этап 2 большого промпта: эмоции (все 13 × 3 силы рисуются), шапки, двери, сценки, сон, угол в игре
+    from .anim import EMO
+    from .looks import HAT_ART, NEW_HATS, paint2
+    p.state, p.surface, p.timer = "idle", None, 99
+    for emo in EMO["emotions"]:
+        for lv in ("light", "medium", "strong"):
+            p.emo.clip = p.emo.queue = None
+            p.emo.queue = []
+            assert p.emote(emo, lv), emo
+            for _ in range(int(3 * 144 / 6)):                    # кадры клипа
+                p.update(6 / 144)
+    assert len(NEW_HATS) >= 19 and all(h in HAT_ART or h == "geek" for h in NEW_HATS)
+    cv = tk.Canvas(root)
+    for h in list(HAT_ART) + ["geek", "glasses"]:
+        paint2(cv, 0, 40, {"hat": h, "arms": "wave", "eyes": "happy", "blush": 1, "brow": "raise"})
+    cv.destroy()
+    p.send("надень шлем космонавта")
+    assert p.hat == "astronaut", p.hat
+    p.send("покажи радость")
+    assert p.emo.clip and p.emo.clip["emo"] == "joy"
+    p.send("спасибо")
+    assert p.emo.clip["emo"] in ("gratitude", "joy")
+    p.toggle("climb", False)                                     # чтобы не запрыгнул на тестовое окно
+    p.state, p.x, p.y, p.vy, p.timer, p.surface, p.surf = "idle", float(p.L + 400), float(p.B - H), 0.0, 99, None, None
+    p.emo.clip, p.emo.queue = None, []
+    p.door_trip("cowboy")
+    assert p.door_plan, (p.bubble.l.cget("text"), p.busy, p.surface, p.state, p.thinking, p.job, p.jobs, p.dz)
+    for _ in range(300):
+        run(0.1)
+        if not p.door_plan:
+            break
+    assert p.door_plan is None and p.hat == "cowboy" and p.state == "idle", (p.door_plan, p.hat, p.state)
+    p.toggle("climb", True)
+    p.state = "sleep"
+    p.ptr_last = (-9999, -9999)
+    p.root.winfo_pointerxy = lambda: (int(p.x + 50), int(p.y + 40))
+    p.sleep_wake()
+    assert p.state == "idle"
+    del p.root.winfo_pointerxy
+    p.prefs["working"] = True
+    assert p.emote("joy") is None                               # «я работаю» — тишина
+    p.prefs["working"] = False
+    p.set_pref("game_mode", "corner")
+    p.set_gaming(True)
+    assert p.root.winfo_viewable() and p.state == "sleep"
+    p.set_gaming(False)
+    p.set_pref("game_mode", "hide")
+    p.state = "idle"
     p.recall_window().destroy()
     # этап 6: характер, мини-игры, эмоции, танцы, настройки, обновления
     from . import update

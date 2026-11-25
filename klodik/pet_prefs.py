@@ -48,7 +48,29 @@ class PetPrefs:
         for k, (title, _) in FEATURES.items():
             v = s.feat_vars[k] = tk.BooleanVar(value=s.on(k))
             m.add_checkbutton(label=title, variable=v, command=lambda k=k, v=v: s.toggle(k, v.get()))
+        m.add_separator()
+        for key, title, options in (
+                ("anim", "Анимации", [("max", "Максимум"), ("moderate", "Умеренно"), ("min", "Минимум")]),
+                ("emo", "Эмоции", [("calm", "Спокойный"), ("lively", "Живой"), ("very", "Очень эмоциональный")]),
+                ("game_mode", "В игре", [("hide", "Прятаться"), ("corner", "Тихо сидеть в углу")])):
+            sub = tk.Menu(m, tearoff=0)
+            var = tk.StringVar(value=s.prefs.get(key, options[0][0] if key != "emo" else "lively"))
+            s.feat_vars[key] = var
+            for val, label in options:
+                sub.add_radiobutton(label=label, value=val, variable=var,
+                                    command=lambda key=key, var=var: s.set_pref(key, var.get()))
+            m.add_cascade(label=title, menu=sub)
+        for key, title in (("no_emotions", "Режим без эмоций"), ("working", "Режим «я работаю»")):
+            v = s.feat_vars[key] = tk.BooleanVar(value=bool(s.prefs.get(key)))
+            m.add_checkbutton(label=title, variable=v, command=lambda key=key, v=v: s.set_pref(key, v.get()))
         return m
+
+    def set_pref(s, key, value):
+        s.prefs[key] = value
+        s.save()
+        s.key = None
+        if hasattr(s, "log"):
+            s.log("setting", key, str(value))
 
     def quiet_now(s):
         """Тихие часы: «23:00–08:00» переходит через полночь."""

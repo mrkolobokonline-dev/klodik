@@ -19,11 +19,14 @@ from .pet_fun import PetFun
 from .pet_safety import PetSafety
 from .pet_onboard import PetOnboard
 from .pet_prefs import PetPrefs
+from .looks import paint2, particles
+from .pet_scenes import PetScenes
+from .anim import Emotions, micro
 
 
 # ---------- сам Клодик ----------
-class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld, PetTalk,
-          PetActions):
+class Pet(PetSafety, PetOnboard, PetPrefs, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld,
+          PetTalk, PetActions):
     def __init__(s, root, claude=None, fx=None, windows=list_windows, plats=platforms, frame=frame_rect):
         s.root, s.claude, s.fx, s.windows = root, claude or s.think, fx or Effects(), windows
         s.platforms_fn, s.frame_fn = plats, frame
@@ -49,6 +52,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
         s.surface, s.surf, s.plats, s.edge_go, s.climb = None, None, [], False, None
         s.alarm_until, s.beeps, s.photo_t = 0.0, [], None
         s.look, s.yawn_until = None, 0.0
+        s.emo, s.pose, s.hook_id, s.vx = Emotions(), None, None, 0.0
         s.speaker, s.tts_on, s.talk_until, s.calib, s.voice = Speaker(), True, 0.0, None, "dmitri"
         s.voice_vol = 40
         load_profile()
@@ -67,6 +71,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
         s.fun_load()
         s.persona_var = tk.StringVar(value=s.persona)
         s.level_var = tk.StringVar(value=s.access_level)
+        s.scenes_load()
         s.onboard_load()                                   # первый запуск — знакомство
         s.hat_var, s.snow_var = tk.StringVar(value=s.hat), tk.StringVar(value=s.snow_mode)
         s.brain_var = tk.StringVar(value=s.brain)
@@ -156,7 +161,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
             s.root.after(250 if s.gaming else TICK_MS, s.tick)  # в игре — 4 раза в секунду, не 144
 
     def every(s, name, period):
-        if s.clock >= s.next[name]:
+        if s.clock >= s.next.get(name, 0.0):              # новый таймер заводится сам
             s.next[name] = s.clock + period
             return True
         return False
@@ -164,9 +169,16 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
     def set_gaming(s, on):
         """Полноэкранная игра: прячемся и почти не тратим процессор; уши, таймеры и команды работают."""
         s.gaming = on
-        wins = [s.root] + [x.w for x in (s.buddy, s.food, s.ball) if x]
+        corner = s.prefs.get("game_mode") == "corner"      # или тихо сидит в углу, а не прячется совсем
+        wins = ([] if corner else [s.root]) + [x.w for x in (s.buddy, s.food, s.ball) if x]
         for w in wins:
             w.withdraw() if on else w.deiconify()
+        if on and corner:
+            s.drop()
+            s.x, s.y, s.state = float(s.L), float(s.B - H), "sleep"
+            s.place()
+            s.key = None
+            s.draw()
         if on:
             s.bubble.hide()
         else:
@@ -219,6 +231,11 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
         if s.every("smart", 10):
             s.smart_tick()
             s.game_watch()
+            s.ambient_emotions()
+            s.daily_scene()
+        if s.every("wake", 0.25):
+            s.sleep_wake()
+        s.door_tick(dt)
         s.mood_tick(dt)
         s.catch_tick(dt)
         while s.beeps and s.beeps[0] <= t:
@@ -265,6 +282,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
                     s.history.append(f"Клодик: {say}")
                     s.mood_add(2)
                     s.say(say, speak=True)
+                    s.emote("joy", "light")
                     s.state, s.timer = "idle", 1.0
                     s.vy = -230.0                         # подпрыгнуть от радости
                 else:
@@ -282,6 +300,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
         if s.dozer:
             s.dozer_update(dt)
         else:
+            s.pose = s.emo.frame(s.clock)
             s.ride()
             s.move(dt)
         s.place()
@@ -326,6 +345,8 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
             prev = s.y
             s.vy += G * dt
             s.y += s.vy * dt
+            if s.vx:                                       # отпрыгивает в сторону
+                s.x = max(s.L, min(s.R - W, s.x + s.vx * dt))
             if s.job and s.job_phase == "act" and s.job["anim"] == "jump" and not s.job_fired and s.vy >= 0:
                 s.fire_job()                              # на вершине прыжка «бьёт» по окну
             if s.vy > 0:
@@ -340,8 +361,24 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
                 elif s.y >= s.ground - 0.5:               # тот же допуск, что и в проверке «в воздухе»
                     if s.vy > 650:                        # падал с высоты больше ~300 px — «Ого!»
                         s.landed_hard(s.vy * s.vy / (2 * G))
-                    s.y, s.vy = s.ground, 0.0
+                    s.y, s.vy, s.vx = s.ground, 0.0, 0.0
             return
+        pose = s.pose
+        if pose and st in ("idle", "walk") and not s.surface:  # движения из клипа эмоции
+            if id(s.emo.clip) != s.hook_id:                # один раз на клип
+                s.hook_id = id(s.emo.clip)
+                px = s.root.winfo_pointerx()
+                if pose.get("jump_away"):
+                    s.dir = -1 if px > cx else 1
+                    s.vy, s.vx = -260.0, s.dir * 180.0
+                elif pose.get("walk_to_cursor"):
+                    s.target = max(s.L, min(px - W // 2 - 80 * (1 if px > cx else -1), s.R - W))
+                    s.state, s.timer, s.dir = "walk", 6, (1 if s.target > s.x else -1)
+                elif pose.get("hide_edge"):
+                    s.target = s.L if cx < (s.L + s.R) / 2 else s.R - W
+                    s.state, s.timer, s.dir = "walk", 8, (1 if s.target > s.x else -1)
+            if pose.get("hop") and s.vy == 0:
+                s.vy = -170.0
         if st == "job":
             s.job_step(dt, cx)
         elif st == "fetch":
@@ -359,6 +396,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
                     s.mood_add(8)
                     s.state, s.timer = "eat", 2.0
                     s.say("Ням-ням!", 2)
+                    s.emote("joy", "medium")
                     s.save()
         elif st == "chase":
             if not s.ball:
@@ -410,7 +448,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
                 s.dozer, s.state = Dozer(s), "dozer"
             return
         elif st == "walk":
-            s.x += s.dir * WALK * dt
+            s.x += s.dir * WALK * dt * (0.5 if pose and pose.get("slow_walk") else 1)
             if s.target is not None and abs(s.x - s.target) < 3:
                 s.state, s.timer, s.target = "idle", 3.2, None
                 s.say("Я тут!", 1.5)
@@ -423,6 +461,8 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
                     else:
                         s.edge_go = True
                         s.say("Прыг!", 1)
+        if st == "door":                                  # уход в дверь — за край экрана можно
+            return
         if s.x <= s.L or s.x >= s.R - W:
             s.x, s.dir = max(s.L, min(s.x, s.R - W)), -s.dir
         if st in ("job", "alarm", "photo") or s.inp or s.thinking:
@@ -444,7 +484,8 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
                 s.c.delete("all")
             return
         air = s.y < s.ground - 1
-        going = st in ("walk", "fetch", "chase", "climb", "alarm", "dozer_out") or (st == "job" and s.job_phase == "go")
+        going = (st in ("walk", "fetch", "chase", "climb", "alarm", "dozer_out") or (st == "job" and s.job_phase == "go")
+                 or (st == "door" and s.door_plan and s.door_plan["phase"] in ("go", "enter", "exit")))
         acting = st == "job" and s.job_phase == "act" and s.job and s.job["anim"] != "jump" and not s.job_fired
         dancing = st == "dance" or (acting and s.job["anim"] == "dance")
         beat = s.meter.peak > 0.25 if st == "dance" and s.meter.ok else int(t * 4) % 2 == 0
@@ -474,21 +515,42 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
         carry = s.carry if s.carry and s.carry[1] > t else None
         ring = int(t * 10) % 2 if st == "alarm" else -1
         hat = s.hat_now()
-        key = (legs, squash, sway, eyes, sh, mouth, sweat, zz, heart, carry and id(carry[0]), air, hat, ring)
+        sp = {"color": "#e0553f" if eyes == "angry" else ORANGE, "legs": legs, "squash": squash, "eyes": eyes, "sh": sh,
+              "mouth": mouth, "hat": hat}
+        anim = s.prefs.get("anim", "max")
+        pose = s.pose if s.pose and st not in ("sleep", "job", "dozer_out", "drag") else None
+        if not pose and st in ("idle", "walk") and not air and not blink:
+            sp.update({k: v for k, v in micro(t, anim).items() if not (k == "legs" and st == "walk")})
+        part = None
+        if pose:                                           # клип эмоции поверх базовой позы
+            part = pose.get("particles")
+            sway = pose.get("sway", sway) + pose.get("jitter", 0)
+            sp.update({k: v for k, v in pose.items() if k in ("color", "legs", "squash", "eyes", "sh", "mouth", "arms",
+                                                              "brow", "blush", "stretch", "puff", "hat_dx", "hat_dy")})
+            if pose.get("eyes") == "happy" and blink:
+                sp["eyes"] = "closed"
+        if s.hot_n >= 5 and anim != "min":                 # жарко — обмахивается веером
+            sp["arms"] = "head" if int(t * 6) % 2 else "normal"
+        part_key = (part[0], round(part[1], 1), part[2]) if part else None
+        key = (tuple(sorted(sp.items())), sway, sweat, zz, heart, carry and id(carry[0]), air, ring, part_key)
         if key == s.key:
             return
         s.key = key
         c = s.c
         c.delete("all")
-        oy = H - 10 * C + squash * C
+        oy = H - 10 * C + sp["squash"] * C
         ox = OX + sway * C
-        paint(c, ox, oy, "#e0553f" if eyes == "angry" else ORANGE, legs, squash, eyes, sh, mouth, hat)
+        paint2(c, ox, oy, sp)
+        if part_key:
+            particles(c, ox, oy, part[0], part[1], part[2])
 
         def px(col, row, w, h, fill):
             c.create_rectangle(ox + col * C, oy + row * C, ox + (col + w) * C, oy + (row + h) * C, fill=fill, outline="")
         if sweat >= 0:
             px(1, 0 + sweat, 1, 1, "#7cc4ff")
             px(14, (sweat + 2) % 4, 1, 1, "#7cc4ff")
+            if anim != "min":                              # веер
+                px(15, -2 + (int(t * 6) % 2), 3, 2, "#f2c230")
         if zz >= 0:
             c.create_text(OX + 15 * C, oy - 6 - zz * 7, text="z" * (zz + 1), fill=DARK, font=("Consolas", 11, "bold"))
         if heart >= 0:
@@ -499,6 +561,13 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, Pe
             thing, top = carry[0], -6 if hat in ("none", "glasses") else -8
             if isinstance(thing, tk.PhotoImage):
                 c.create_image(W / 2, oy + (top + 1) * C, image=thing)
+            elif thing in ("coffee", "tea"):              # кружка; у чая — пиала потемнее
+                px(10, 1, 3, 3, "#f4f4f4" if thing == "coffee" else "#c9a27a"); px(13, 2, 1, 1, "#f4f4f4")
+                px(10, 1, 3, 1, "#6f4e37" if thing == "coffee" else "#7a8f3a")
+                if int(t * 3) % 2:
+                    px(11, -1, 1, 1, "#d0d0d0")          # пар
+            elif thing == "brush":                         # зубная щётка у рта + пена
+                px(9, 4 + int(t * 6) % 2, 5, 1, "#4c8fd9"); px(8, 4, 1, 1, "#ffffff"); px(7, 5, 1, 1, "#ffffff")
             elif thing == "mic":
                 px(7, top, 2, 3, "#555"); px(6, top + 2, 4, 1, "#555"); px(7, top + 3, 2, 1, "#555"); px(7, top, 1, 1, "#999")
             elif thing == "camera":

@@ -1,4 +1,5 @@
 """Разговор и команды, таймеры, фото, друг."""
+from .looks import skins
 from .common import *  # noqa: F401,F403
 from .apps import *  # noqa: F401,F403
 from .winapi import *  # noqa: F401,F403
@@ -96,6 +97,8 @@ class PetTalk:
                 local.append(lambda: s.set_listen(False))
             elif re.search(r"слушай меня|(?:включи|вруби)\s+(?:микрофон|уши)", seg):
                 local.append(lambda: s.set_listen(True))
+            elif fn := s.scene_command(seg):                    # «переоденься» — уйти в дверь и выйти в новой шапке
+                local.append(fn)
             elif fn := s.fun_command(seg):                      # мини-игры, характер, танцы, «сколько играл»
                 local.append(fn)
             elif fn := s.pc_command(seg):                       # режимы, буфер, файлы и папки, система
@@ -120,8 +123,11 @@ class PetTalk:
                 local.append(s.drop)
             elif re.search(r"залезь|запрыгни|прыгай по окнам|прыгни на окно", seg):
                 local.append(lambda: s.try_climb() or s.say("Некуда залезть — нет подходящих окон", 3))
-            elif m := re.search(r"(?:надень|одень)\s+(\w+)", seg):
-                hat = next((v for k, v in HAT_WORDS.items() if m[1].startswith(k)), None)
+            elif m := re.search(r"(?:надень|одень|наряди\w*)\s+(.+)", seg):
+                words = m[1].split()                              # «шлем космонавта» — ищем любое слово-примету
+                hat = next((v for k, v in sorted(HAT_WORDS.items(), key=lambda kv: -len(kv[0]))
+                            if any(w.startswith(k) for w in words) or k in m[1]), None)
+                hat = hat or next((f"skin:{n}" for n in skins() if n.lower() in m[1]), None)
                 local.append((lambda h=hat: s.set_hat(h)) if hat else (lambda w=m[1]: s.say(f"У меня нет «{w}»", 2)))
             elif re.search(r"^сними|разденься", seg):
                 local.append(lambda: s.set_hat("none"))
@@ -195,6 +201,7 @@ class PetTalk:
             return
         s.talk_until = s.clock + 12                           # что отвечу на эту просьбу — скажу вслух
         s.request = (text, "голос" if voice else "текст")     # для журнала: кто и зачем попросил
+        s.last_touch = s.clock                                # для «скучает»: когда последний раз общались
         if s.understand(text):
             lf = s.last_fail                                  # переспросил по-другому и сработало — запомню
             if lf and s.clock - lf[1] < 40 and difflib.SequenceMatcher(None, lf[0], text.lower()).ratio() >= 0.5:
@@ -206,6 +213,7 @@ class PetTalk:
             s.last_fail = (text.lower(), s.clock)
             s.day_note("fail", text.lower())                  # ночью разберу, что это было
         if not allow_chat:                                    # 20 с после команды — только команды, не болтовня
+            s.emote("doubt", "light")
             return s.say(f"«{text}» — не понял", 2)
         s.day_note("chat", "")
         s.learn_facts(text)                                   # тихо запомню, если ты рассказал что-то о себе
@@ -237,6 +245,7 @@ class PetTalk:
         s.carry = ("clock", s.alarm_until)
         s.beeps = [s.clock, s.clock + 1.3, s.clock + 2.6]
         s.say("⏰ Время!" + (f"\n{note}" if note else ""), 12)
+        s.emote("surprise", "strong")
         if s.tts_on:
             s.speaker.say("Время! " + note if note else "Время! Таймер сработал.")
 

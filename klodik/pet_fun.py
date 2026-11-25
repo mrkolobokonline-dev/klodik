@@ -24,6 +24,9 @@ GAME_NAMES = {"diabloimmortal": "Diablo Immortal", "cs2": "Counter-Strike 2", "d
               "fortniteclient-win64-shipping": "Fortnite", "genshinimpact": "Genshin Impact", "hogwartslegacy": "Хогвартс"}
 RPS = {"камен": "камень", "ножниц": "ножницы", "бумаг": "бумага"}
 BEATS = {"камень": "ножницы", "ножницы": "бумага", "бумага": "камень"}
+EMO_WORDS = {"радост": "joy", "скук": "boredom", "интерес": "interest", "усталост": "tired", "грус": "sad",
+             "удивлен": "surprise", "смущен": "embarrassed", "гордост": "pride", "испуг": "fear", "страх": "fear",
+             "сомнен": "doubt", "благодарн": "gratitude", "нежност": "tenderness", "злост": "playful_anger"}
 ANGRY = ["Хватит тыкать!", "Ай! Ну сколько можно!", "Я тебе не кнопка!", "Щас как укушу!"]
 
 
@@ -133,6 +136,8 @@ class PetFun:
         if not s.meter.ok or s.speaker.speaking() or s.gaming or not s.on("dance"):
             return
         p = s.meter.peak
+        if p > 0.85 and s.quiet > 3 and s.state in ("idle", "walk", "sleep"):   # резкий громкий звук после тишины
+            s.emote("fear", "light")
         if p > 0.08:
             s.loud, s.quiet = s.loud + dt, 0.0
         else:
@@ -149,6 +154,34 @@ class PetFun:
         s.state, s.timer, s.dance_until = "dance", 9999, s.clock + secs
         s.say(random.choice(["Смотри, как умею!", "Тыц-тыц-тыц!", "Диско!"]), 2, speak=True)
 
+    # --- эмоции (машина клипов — anim.py, словарь — data/emotions.json) ---
+    def emote(s, emo, level="medium"):
+        """Показать эмоцию анимацией. Молчит в играх, в режиме «я работаю» и при «Режиме без эмоций»."""
+        if s.gaming or s.prefs.get("working") or s.prefs.get("no_emotions"):
+            return None
+        return s.emo.emote(emo, level, s.clock, s.prefs.get("anim", "max"), s.prefs.get("emo", "lively"))
+
+    def set_working(s, on):
+        s.prefs["working"] = bool(on)
+        s.save()
+        s.say("Понял, не мешаю: только важные напоминания. Скажи «я закончил», когда освободишься." if on
+              else "Ура, можно снова болтать!", 3, speak=True)
+
+    def ambient_emotions(s):
+        """Раз в 10 с: изредка показать настроение — скучно, устал, грустно, интересно. Без давления и упрёков."""
+        if s.state not in ("idle", "walk") or s.busy or s.emo.clip or s.quiet_now():
+            return
+        idle_for = s.clock - getattr(s, "last_touch", 0.0)
+        r = random.random()
+        if s.sad and r < 0.05:
+            s.emote("sad", "light")
+        elif is_night() and r < 0.06:
+            s.emote("tired", random.choice(["light", "medium"]))
+        elif idle_for > 900 and r < 0.05:
+            s.emote("boredom", "light")
+        elif r < 0.02:
+            s.emote(random.choice(["interest", "joy", "tenderness"]), "light")
+
     def poke(s):
         """Клик по Клодику. 5 кликов за 4 секунды — злится и не открывает ввод."""
         now = s.clock
@@ -158,12 +191,14 @@ class PetFun:
             s.mood_add(-5)
             s.vy = -150.0
             s.say(random.choice(ANGRY), 2, speak=True)
+            s.emote("playful_anger", "strong")
             return True
         return False
 
     def landed_hard(s, height):
         if height > 300:
             s.wow_until = s.clock + 1.2
+            s.emote("surprise", "strong" if height > 600 else "medium")
             s.say(random.choice(["Ого!", "Ай, мягко…", "Вот это полёт!"]), 1.5)
 
     # --- мини-игры ---
@@ -305,6 +340,18 @@ class PetFun:
             p = next((v for k, v in PERSONA_WORDS.items() if (m[1] or m[2] or "").startswith(k)), None)
             if p:
                 return lambda: s.set_persona(p)
+        if m := re.search(r"(?:покажи|изобрази|сделай)\s+(?:эмоцию\s+)?(" + "|".join(EMO_WORDS) + r")\w*", seg):
+            emo = next(v for k, v in EMO_WORDS.items() if m[1].startswith(k))
+            return lambda: s.emote(emo, "strong")
+        if re.search(r"^(?:спасибо|благодарю|спс|дякую)|молодец|умница|красавчик|ты лучший", seg):
+            praise = bool(re.search(r"молодец|умница|красавчик|лучший", seg))
+            return lambda: (s.emote("embarrassed" if praise else "gratitude", "medium"),
+                            s.say(random.choice(["Ой, спасибо!", "Да ладно тебе…", "Стараюсь!"] if praise else
+                                                ["Всегда пожалуйста!", "Обращайся!", "Рад помочь!"]), 2, speak=True))
+        if re.search(r"я работаю|не мешай|режим работы клодика", seg):
+            return lambda: s.set_working(True)
+        if re.search(r"я (?:закончил|освободился)|можно мешать|хватит работать", seg):
+            return lambda: s.set_working(False)
         if re.search(r"потанцуй|станцуй|танцуй", seg):
             return s.dance
         if re.search(r"(?:открой|покажи)\s+настройки|^настройки$", seg):
