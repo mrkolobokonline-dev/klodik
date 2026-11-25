@@ -1,0 +1,427 @@
+"""Самопроверка: python pet.pyw --selftest"""
+from .common import *  # noqa: F401,F403
+from .apps import *  # noqa: F401,F403
+from .winapi import *  # noqa: F401,F403
+from .monitor import *  # noqa: F401,F403
+from .brain import *  # noqa: F401,F403
+from .voice import *  # noqa: F401,F403
+from .sprites import *  # noqa: F401,F403
+from .install import *  # noqa: F401,F403
+
+from . import apps, common, pet_fun, pet_smart, pet_tasks, voice
+from .pet import Pet
+from .tasks import calc, parse_when
+
+
+def selftest():
+    common.STATE = os.path.join(HERE, "state.selftest.json")
+    voice.ERRLOG = os.path.join(os.environ.get("TEMP", HERE), "klodik_selftest_errors.log")
+    voice.PROFILE = os.path.join(os.environ.get("TEMP", HERE), "klodik_selftest_profile.json")
+    voice.WAKE_EXTRA.clear()
+    apps.LEARNED = os.path.join(HERE, "learned.selftest.json")
+    apps.APPS_CACHE = os.path.join(HERE, "apps.selftest.json")
+    pet_tasks.REMINDERS = os.path.join(HERE, "reminders.selftest.json")
+    pet_tasks.NOTES = os.path.join(HERE, "notes.selftest.json")
+    for name in ("MEMORY", "DAY", "DIARY", "FRESH"):
+        setattr(pet_smart, name, os.path.join(HERE, f"{name.lower()}.selftest.json"))
+        if os.path.exists(getattr(pet_smart, name)):
+            os.remove(getattr(pet_smart, name))
+    t0 = time.time()
+    pet_tasks.write_json(pet_tasks.REMINDERS, [{"t": t0 - 3600, "text": "пропущенное"}, {"t": t0 + 99999, "text": "потом"}])
+    for f in (apps.LEARNED, apps.APPS_CACHE, pet_tasks.NOTES):
+        if os.path.exists(f):
+            os.remove(f)
+
+    class Rec:
+        calls = []
+        def close(s, h): s.calls.append(("close", h))
+        def minimize(s, h): s.calls.append(("min", h))
+        def maximize(s, h): s.calls.append(("max", h))
+        def focus(s, h): s.calls.append(("focus", h))
+        def move(s, h, x, y): s.calls.append(("move", h))
+        def start(s, t): s.calls.append(("start", t))
+        def keys(s, vk, n=1): s.calls.append(("keys", vk, n))
+        def beep(s): s.calls.append(("beep",))
+        def screenshot(s): s.calls.append(("shot",)); return "C:\\test.png"
+        def lock(s): s.calls.append(("lock",))
+        def sleep_pc(s): s.calls.append(("sleep",))
+        def abort_shutdown(s): s.calls.append(("abort",))
+        def shutdown(s, secs, restart=False): s.calls.append(("shutdown", secs, restart))
+        def paste(s): s.calls.append(("paste",))
+
+    asked = []
+    win = lambda h, title, proc, rect, mn=False, mx=False: {"hwnd": h, "title": title, "proc": proc, "rect": rect,
+                                                           "min": mn, "max": mx}
+    fake_win = [win(123, "Друзья - Discord", "Discord.exe", (300, 100, 900, 600)),
+                win(456, "Блокнот", "notepad.exe", (0, 0, 10, 10), mn=True),
+                win(789, "Claude", "claude.exe", (1000, 100, 1500, 700))]
+    plat = {"rect": (1000, 700, 1400, 1100)}
+    root = tk.Tk()
+    rec = Rec()
+    p = Pet(root, claude=lambda prompt: (asked.append(prompt), "привет")[1], fx=rec, windows=lambda: fake_win,
+            plats=lambda: [(777,) + plat["rect"] + (True,)] if plat["rect"] else [],
+            frame=lambda h: plat["rect"] if h == 777 else None)
+    p.start_apps = [("Тестапп", "shell:AppsFolder\\X!y"), ("Steam", "shell:AppsFolder\\S!s")]
+    p.apps = []
+    p.now = lambda: t0 + p.clock                                 # время Клодика = виртуальные часы теста
+    assert [r["text"] for r in p.reminders] == ["потом"], p.reminders   # пропущенное убрано и будет сказано
+    run = lambda sec: [p.update(1 / 144) for _ in range(int(sec * 144))]
+
+    def settle(limit=60):
+        for _ in range(int(limit * 10)):
+            time.sleep(0.002)
+            run(0.1)
+            if not p.busy:
+                return
+        raise AssertionError(f"завис в {p.state}: thinking={p.thinking} job={p.job} jobs={p.jobs} dz={bool(p.dz)}")
+
+    for st in ("walk", "idle", "sleep", "eat", "chase"):
+        p.state, p.timer = st, 0.3
+        run(0.5)
+    for hat in HATS:                                            # все шапки рисуются
+        p.hat, p.key = hat, None
+        p.draw()
+    p.hat = "auto"
+    p.hunger = 50.0
+    p.feed(); run(6)
+    assert p.food is None and p.hunger < 20, "не доел печеньку"
+    p.toggle_ball(); run(3)
+    assert p.ball and p.L <= p.ball.x <= p.R, p.ball.x
+    p.toggle_ball()
+    # команды — без токенов
+    p.send("Клодик, открой тестапп, закрой дискорд и сделай потише на 20")
+    settle()
+    assert rec.calls == [("start", "shell:AppsFolder\\X!y"), ("close", 123), ("keys", 0xAE, 10)], rec.calls
+    rec.calls.clear()
+    p.send("запусти стим, сверни блокнот, найди рецепт борща, пауза")
+    settle()
+    assert rec.calls == [("start", "shell:AppsFolder\\S!s"), ("min", 456),
+                         ("start", "https://www.google.com/search?q=%D1%80%D0%B5%D1%86%D0%B5%D0%BF%D1%82%20%D0%B1%D0%BE%D1%80%D1%89%D0%B0"),
+                         ("keys", 0xB3, 1)], rec.calls
+    p.send("закрой окно")
+    assert "Не нашёл" in p.bubble.l.cget("text")
+    # бульдозер: закрывает всё, кроме Claude; свёрнутое — в конце
+    rec.calls.clear()
+    p.send("закрой все окна")
+    settle()
+    closed = [c[1] for c in rec.calls if c[0] == "close"]
+    assert sorted(closed) == [123, 456] and ("move", 123) in rec.calls and 789 not in closed, rec.calls
+    assert "Закрыл 2 окна" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    # напоминания: сохраняются на диск, звенят вовремя, отменяются
+    rec.calls.clear()
+    p.send("напомни через 1 секунду попить воды")
+    assert [r["text"] for r in p.reminders] == ["попить воды", "потом"], p.reminders
+    assert "попить воды" in json.dumps(pet_tasks.read_json(pet_tasks.REMINDERS, []), ensure_ascii=False)
+    run(1.6)
+    assert p.state == "alarm" and "попить воды" in p.bubble.l.cget("text") and ("beep",) in rec.calls
+    p.stop_alarm()
+    p.send("напомни завтра в 9 позвонить маме")
+    assert any(r["text"] == "позвонить маме" for r in p.reminders), p.reminders
+    p.send("отмени напоминание про маму")
+    assert not any("маме" in r["text"] for r in p.reminders) and any(r["text"] == "потом" for r in p.reminders)
+    assert parse_duration("засеки полчаса") == 1800 and parse_duration("таймер на 1 час 20 минут") == 4800
+    # список дел, калькулятор, переводчик — без токенов (перевод — через мозги)
+    p.send("запиши купить хлеб")
+    p.send("добавь в список позвонить Васе")
+    assert p.notes == ["купить хлеб", "позвонить васе"], p.notes
+    p.notes_window()
+    p.send("вычеркни хлеб")
+    assert p.notes == ["позвонить васе"] and pet_tasks.read_json(pet_tasks.NOTES, []) == ["позвонить васе"]
+    p.notes_win.destroy()
+    n_asked = len(asked)
+    p.send("сколько будет 15 процентов от 3400")
+    assert "= 510" in p.bubble.l.cget("text") and len(asked) == n_asked, p.bubble.l.cget("text")
+    p.send("переведи доброе утро на английский")
+    settle()
+    assert len(asked) == n_asked + 1 and "английский" in asked[-1] and "доброе утро" in asked[-1], asked[-1]
+    asked.clear()                                                # дальше снова проверяем, что команды не ходят в ИИ
+    # память о тебе: явная («запомни, что я…») и тихая (из болтовни — через ИИ)
+    p.llm = lambda system, prompt, tokens=400: (
+        "CMD: сделай громче" if "искажённая команда" in prompt else
+        "ИТОГ: Хороший был день, много играли.\nФ: Опять Дота?\nФ: Я выспался, а ты?" if "ИТОГ" in prompt else
+        "любит котиков")
+    p.send("запомни, что я люблю доту")
+    assert [f["fact"] for f in p.memory] == ["люблю доту"], p.memory
+    p.send("что ты обо мне знаешь")
+    assert "люблю доту" in p.bubble.l.cget("text")
+    p.send("забудь что я люблю доту")
+    assert not p.memory
+    p.send("у меня дома живёт кот")
+    settle()
+    for _ in range(50):
+        time.sleep(0.02)
+        run(0.05)
+    assert [f["fact"] for f in p.memory] == ["любит котиков"], p.memory
+    p.send("как дела")
+    settle()
+    assert "любит котиков" in asked[-1], asked[-1]               # мозги видят, что я о тебе знаю
+    # итоги дня: дневник, свежие фразы, самообучение на непонятых фразах
+    p.day = {"date": "2026-01-01", "cmds": {"сделай громче": 3}, "fails": ["громкость в верх"], "chat": 2,
+             "games": {"dota2": 3600}}
+    p.close_day()
+    diary = pet_tasks.read_json(pet_smart.DIARY, [])
+    assert diary[-1]["summary"].startswith("Хороший") and diary[-1]["learned"] == 1, diary
+    assert p.learned.get("громкость в верх") == "сделай громче" and p.fresh == ["Опять Дота?", "Я выспался, а ты?"]
+    assert p.day["date"] == pet_smart.today() and p.walk_phrase()
+    p.morning()
+    assert "dota2" in p.bubble.l.cget("text") and "выучил 1" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    p.game_t, p.hinted = 4 * 3600, {}
+    p.hints()
+    assert "3 часа" in p.bubble.l.cget("text")
+    asked.clear()
+    # этап 5: режимы, «точно?», буфер, файлы, папки, печать
+    from . import pet_pc
+    pet_pc.MODES = os.path.join(HERE, "modes.selftest.json")
+    rec.calls.clear()
+    p.send("запомни режим работы: открой тестапп и сделай громче")
+    assert p.modes.get("работ") == "открой тестапп и сделай громче", p.modes
+    p.send("режим работы")
+    settle()
+    assert ("start", "shell:AppsFolder\\X!y") in rec.calls and ("keys", 0xAF, 5) in rec.calls, rec.calls
+    rec.calls.clear()
+    p.send("выключи комп через 10 минут")
+    assert "Скажи «да»" in p.bubble.l.cget("text") and not rec.calls
+    p.send("да")
+    assert rec.calls == [("shutdown", 600, False)], rec.calls
+    p.send("отмени выключение")
+    p.send("перезагрузи комп")
+    p.send("нет")
+    assert rec.calls == [("shutdown", 600, False), ("abort",)], rec.calls
+    p.root.clipboard_clear(); p.root.clipboard_append("helo wrld")
+    p.llm = lambda system, prompt, tokens=400: "hello world" if "helo wrld" in prompt else ""
+    p.send("исправь то что скопировал")
+    for _ in range(100):
+        time.sleep(0.01)
+        run(0.02)
+        if p.root.clipboard_get() == "hello world":
+            break
+    assert p.root.clipboard_get() == "hello world", p.root.clipboard_get()
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        open(os.path.join(tmp, "Отчёт_за_ноябрь.txt"), "w").close()
+        os.makedirs(os.path.join(tmp, "AppData")); open(os.path.join(tmp, "AppData", "отчёт.txt"), "w").close()
+        assert [os.path.basename(x) for x in pet_pc.find_files("отчёт", roots=[tmp])] == ["Отчёт_за_ноябрь.txt"]
+        assert pet_pc.newest(tmp).endswith("Отчёт_за_ноябрь.txt")
+        p.files_result(json.dumps({"q": "отчёт", "open": False, "hits": [os.path.join(tmp, "Отчёт_за_ноябрь.txt")]}))
+        rec.calls.clear()
+        p.send("открой первый")
+        assert rec.calls and rec.calls[0][1].endswith("Отчёт_за_ноябрь.txt"), rec.calls
+    rec.calls.clear()
+    p.send("открой загрузки")
+    assert rec.calls == [("start", os.path.join(os.environ["USERPROFILE"], "Downloads"))], rec.calls
+    p.send("напечатай Привет, Мир")
+    assert p.root.clipboard_get() == "Привет, Мир"
+    # этап 6: характер, мини-игры, эмоции, танцы, настройки, обновления
+    from . import update
+    import pycaw.pycaw                                           # счётчик звука для танцев (и в .exe тоже)
+    assert pycaw.pycaw.AudioUtilities
+    p.meter.ok = False                                          # реальная музыка на компе не должна влиять на тест
+    p.send("будь дерзким")
+    assert p.persona == "sassy" and "саркастичный" in p.persona_prompt() and p.ack() in pet_fun.PERSONAS["sassy"][2]
+    p.send("будь добрым")
+    p.send("сыграем в камень, ножницы, бумага")
+    assert p.game and p.game["kind"] == "rps", p.game
+    p.send("камень")
+    assert "У меня" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    p.send("хватит")
+    assert p.game is None
+    p.send("угадай число")
+    p.game["secret"] = 42
+    p.send("пятьдесят")
+    assert "Меньше" in p.bubble.l.cget("text")
+    p.send("42")
+    assert "Угадал" in p.bubble.l.cget("text") and p.game is None
+    p.llm = lambda system, prompt, tokens=400: "ВОПРОС: Столица Франции?\nОТВЕТ: Париж"
+    p.send("викторина")
+    for _ in range(100):
+        time.sleep(0.01)
+        run(0.02)
+        if p.game and p.game.get("a"):
+            break
+    assert "Франции" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    p.send("это париж")
+    assert "Правильно" in p.bubble.l.cget("text") and p.game["score"] == 1
+    p.send("хватит")
+    p.send("лови печеньки")
+    run(2.5)
+    assert p.game["cookies"], "печеньки не падают"
+    p.catch_hit(p.game["cookies"][0])
+    assert p.game["score"] == 1
+    run(31)
+    assert p.game is None and p.last_score == 1                 # облачко могла перебить случайная фраза — смотрим счёт
+    p.state = "idle"
+    for _ in range(5):
+        p.poke()
+    assert p.angry_until > p.clock
+    p.key = None; p.draw()                                     # злое лицо рисуется
+    p.dance()
+    run(1)
+    assert p.state == "dance"
+    run(7)
+    assert p.state != "dance"
+    p.day["games"] = {"DiabloImmortal": 5400}
+    p.send("сколько я сегодня играл")
+    assert "Diablo Immortal" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    win = p.open_settings() or p.settings_win
+    assert win.winfo_exists()
+    win.destroy()
+    assert update.ver("v1.7.0") > update.ver(update.VERSION) and update.repo()   # без сети: GitHub проверяю отдельно
+    if os.path.exists(pet_pc.MODES):
+        os.remove(pet_pc.MODES)
+    asked.clear()
+    # фото
+    p.send("сфоткай")
+    settle()
+    assert ("shot",) in rec.calls and "Сохранил" in p.bubble.l.cget("text")
+    # друг
+    p.send("позови друга")
+    assert p.buddy
+    run(3)
+    p.send("прогони друга")
+    run(25)
+    assert p.buddy is None, "друг не ушёл"
+    # окна-платформы: залезть, ехать вместе с окном, упасть, когда окно пропало
+    run(0.5)
+    p.state, p.timer, p.x = "idle", 5, 600.0
+    assert p.try_climb()
+    for _ in range(150):
+        run(0.1)
+        if p.surface:
+            break
+    p.state, p.timer = "idle", 100
+    assert p.surface == 777 and abs(p.y - (700 - H)) < 1, (p.surface, p.y, p.state)
+    x0 = p.x
+    plat["rect"] = (1100, 650, 1500, 1050)
+    run(0.1)
+    assert abs(p.x - x0 - 100) < 1 and abs(p.y - (650 - H)) < 1, (p.x, p.y)
+    plat["rect"] = None
+    run(4)
+    assert p.surface is None and p.y == p.B - H, (p.surface, p.y)
+    # снег и болтовня
+    p.set_snow("on"); run(0.5)
+    assert p.snow
+    p.set_snow("off")
+    assert not asked, "команды не должны тратить токены"
+    p.send("как дела?")
+    settle()
+    assert len(asked) == 1 and len(asked[0]) < 400 and "привет" in p.bubble.l.cget("text"), asked
+    # голос: «Клодик» на слух модели — «клади к»
+    v = VoiceLogic()
+    assert v.final("клади к открой блокнот", 0) == [("voice", "открой блокнот")]
+    assert v.final("сделай громче", 5) == [("voice_follow", "сделай громче")]        # 20 с без «Клодик»
+    assert v.tick(30) == [("follow_end",)] and v.final("сделай громче", 31) == []    # потом — снова нужно имя
+    v = VoiceLogic()
+    assert v.partial("клади к", 0) == [("wake",)] and v.final("клади к", 0) == []
+    assert v.partial("засеки", 1) == [("heard", "засеки")] and v.final("засеки пять минут", 2) == [("voice", "засеки пять минут")]
+    v = VoiceLogic()
+    assert v.final("ну клод разгромив все окна", 3) == [("voice", "разгромив все окна")]
+    v = VoiceLogic()
+    assert v.final("кладу на стол", 4) == [] and v.final("клади", 5) == [("wake",)] and v.tick(20) == [("voice_timeout",)]
+    for heard in ("лодик открой", "колодик открой", "кладик открой", "клоди к открой", "эй клод открой"):
+        assert VoiceLogic().final(heard, 0) == [("voice", "открой")], heard
+    assert VoiceLogic().final("кто там открой", 0) == []
+    # имя так, как его реально слышала распознавалка у пользователя
+    for heard in ("клодия", "колодок", "логик", "владик", "плотик", "клодии к", "кладик"):
+        assert wake_len(heard.split()) > 0, heard
+    assert wake_len("клодия включи музыку".split()) == 1 and wake_len("кладу на стол".split()) == 0
+    assert wake_len("пошли в доту".split()) == 0 and wake_len("включи музыку".split()) == 0
+    assert isinstance(in_call(), bool)
+    assert wake_len("хладик закрой роблокс".split()) == 1 and wake_len("клодиак".split()) == 1
+    v = VoiceLogic()                                             # в звонке: только по имени, без «20 с без имени»
+    v.strict = True
+    assert v.final("клодия открой стим", 0) == [("voice", "открой стим")] and v.final("пошли в доту", 2) == []
+    assert v.final("клодия", 3) == [("wake",)] and v.final("сделай громче", 4) == [("voice", "сделай громче")]
+    rec.calls.clear()
+    vol0 = p.voice_vol
+    p.send("говори тише")
+    assert p.voice_vol == vol0 - 15 and p.speaker.volume == p.voice_vol and not rec.calls, (p.voice_vol, rec.calls)
+    p.set_volume(vol0)
+    # голос Клодика: отвечает вслух на твою просьбу, а случайные фразы — молча
+    class FakeSpeaker:
+        said = []
+        def say(s, t): s.said.append(t)
+        def speaking(s): return False
+        def hush(s): pass
+    p.speaker = FakeSpeaker()
+    p.talk_until = 0
+    p.say("просто гуляю")
+    assert not p.speaker.said
+    p.send("сделай громче")
+    assert p.speaker.said, "ответ на просьбу не прозвучал"
+    settle()
+    # подстройка: «Клодик» звучит как «клодия» — запоминаю; кривые команды — учу
+    class FakeListener:
+        calib = False
+        def stop(s): pass
+    p.listener = FakeListener()
+    p.calibrate()
+    for _ in range(5):
+        p.on_calib("calib", "клодия"); p.calib_next()
+    p.on_calib("calib", "клодия открой с тем"); p.calib_next()
+    p.calib_done()
+    assert "klodiya" in voice.WAKE_EXTRA and p.learned.get("открой с тем") == "открой steam", (voice.WAKE_EXTRA, p.learned)
+    assert os.path.exists(voice.PROFILE)
+    p.listener = None
+    # числа словами, похожие слова, обучение
+    assert parse_duration("засеки двадцать пять минут") == 1500 and num_words("потише на двадцать") == "потише на 20"
+    assert p.fix_words("засеки пяти минут") == "засеки пять минут", p.fix_words("засеки пяти минут")
+    rec.calls.clear()
+    p.send("гомче", voice=True)
+    settle()
+    assert rec.calls == [("keys", 0xAF, 5)] and p.learned.get("гомче") == "громче", (rec.calls, p.learned)
+    rec.calls.clear()
+    p.claude = lambda prompt: (asked.append(prompt), "CMD: сделай потише")[1]   # ИИ угадал команду
+    p.send("чтоб не орало", voice=True)
+    settle()
+    assert ("keys", 0xAE, 5) in rec.calls and p.learned.get("чтоб не орало") == "сделай потише", p.learned
+    rec.calls.clear()
+    n_asked = len(asked)
+    p.send("чтоб не орало", voice=True)                        # второй раз — сам, без токенов
+    settle()
+    assert ("keys", 0xAE, 5) in rec.calls and len(asked) == n_asked
+    found, games = scan_apps()
+    assert isinstance(found, list) and isinstance(games, list) and os.path.exists(apps.APPS_CACHE)
+    import sounddevice, vosk                                     # пакеты для голоса на месте (и в .exe тоже)
+    assert vosk.KaldiRecognizer and sounddevice.query_devices() is not None
+    rec.calls.clear()
+    p.on_voice("wake")
+    assert p.carry and p.carry[0] == "mic"
+    p.on_voice("voice", "сделай громче")
+    settle()
+    assert rec.calls == [("keys", 0xAF, 5)], rec.calls
+    # мозги без ИИ и установка в папку-песочницу
+    p.brain = "none"
+    assert p.think("привет") in CANNED
+    assert ollama_models() is None or isinstance(ollama_models(), list)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        links = {k: os.path.join(tmp, "links", f"{k}.lnk") for k in ("menu", "menu_rm", "desktop", "startup")}
+        exe = install_files(sys.executable, os.path.join(tmp, "app"), links)
+        assert os.path.exists(exe) and all(os.path.exists(x) for x in links.values()), os.listdir(os.path.join(tmp, "links"))
+        make_icon(os.path.join(tmp, "k.ico"))
+        assert os.path.getsize(os.path.join(tmp, "k.ico")) > 500
+    # игра на весь экран: прячется и дальше работает; ошибка в кадре не роняет
+    p.fullscreen_app = lambda: True
+    run(1.5)
+    assert p.gaming and not p.root.winfo_viewable()
+    p.send("сделай громче")
+    assert ("keys", 0xAF, 5) in rec.calls or p.jobs or p.job
+    p.fullscreen_app = lambda: False
+    run(1.5)
+    assert not p.gaming
+    real_draw, p.draw = p.draw, lambda: 1 / 0
+    p.tick()
+    p.draw = real_draw
+    assert p.errors >= 1
+    assert want_model() in OLLAMA_MODELS and pick_model(["llama3:8b", "qwen2.5:3b-instruct"]) == "qwen2.5:3b-instruct"
+    p.stats.poll(); p.stats.poll_slow()
+    assert "ЦП" in p.stats.summary() and isinstance(list_windows(), list) and isinstance(platforms(), list)
+    p.open_input(); p.close_input()
+    assert p.L <= p.x <= p.R - W and p.y <= p.B - H, (p.x, p.y)
+    p.save()
+    for f in (common.STATE, apps.LEARNED, apps.APPS_CACHE, pet_tasks.REMINDERS, pet_tasks.NOTES, pet_smart.MEMORY,
+              pet_smart.DAY, pet_smart.DIARY, pet_smart.FRESH):
+        if os.path.exists(f):
+            os.remove(f)
+    root.destroy()
+    print("ok")

@@ -1,0 +1,27 @@
+# сборки
+dist/
+build/
+*.spec
+__pycache__/
+*.pyc
+venv/
+.venv/
+node_modules/
+
+# секреты и личное — только локально (данные Клодика живут в %APPDATA%\Klodik)
+.env
+*.env
+memory_seed.md
+klodik_memory_seed.md
+state.json
+*.selftest.json
+learned.json
+memory.json
+
+# модели и тяжёлое
+*.onnx
+vosk-model*/
+piper/
+
+# старое
+pet_single_backup.pyw
