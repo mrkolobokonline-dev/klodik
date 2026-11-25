@@ -1,0 +1,216 @@
+{
+ "note": "Каждая эмоция = 3 силы x минимум 3 варианта; клипы собираются из слоёв body/eyes/mouth/hat/pose/particles; пиксель-арт оригинальный.",
+ "layers": [
+  "body",
+  "eyes",
+  "brows",
+  "mouth",
+  "hat",
+  "pose",
+  "particles"
+ ],
+ "intensity": [
+  "light",
+  "medium",
+  "strong"
+ ],
+ "min_variants": 3,
+ "particles": {
+  "joy": "звёздочки",
+  "sad": "капелька",
+  "tired": "zzz",
+  "doubt": "вопросик",
+  "tenderness": "сердечки",
+  "surprise": "восклицание",
+  "embarrassed": "румянец",
+  "playful_anger": "пар"
+ },
+ "idle_micro": [
+  "blink",
+  "breathe",
+  "look_at_cursor",
+  "shift_weight",
+  "adjust_hat"
+ ],
+ "modes": {
+  "max": "все анимации",
+  "moderate": "часть микроанимаций",
+  "min": "только базовые"
+ },
+ "quiet_contexts": [
+  "game",
+  "fullscreen_video",
+  "i_am_working"
+ ],
+ "emotions": {
+  "joy": {
+   "clips": {
+    "joy_light_1": "подпрыгивает",
+    "joy_light_2": "хлопает",
+    "joy_light_3": "танцует",
+    "joy_medium_1": "подпрыгивает",
+    "joy_medium_2": "хлопает",
+    "joy_medium_3": "танцует",
+    "joy_strong_1": "подпрыгивает",
+    "joy_strong_2": "хлопает",
+    "joy_strong_3": "танцует"
+   }
+  },
+  "boredom": {
+   "clips": {
+    "boredom_light_1": "зевает",
+    "boredom_light_2": "рисует на полу",
+    "boredom_light_3": "смотрит по сторонам",
+    "boredom_medium_1": "зевает",
+    "boredom_medium_2": "рисует на полу",
+    "boredom_medium_3": "смотрит по сторонам",
+    "boredom_strong_1": "зевает",
+    "boredom_strong_2": "рисует на полу",
+    "boredom_strong_3": "смотрит по сторонам"
+   }
+  },
+  "interest": {
+   "clips": {
+    "interest_light_1": "наклоняет голову",
+    "interest_light_2": "приближается к курсору",
+    "interest_light_3": "поднимает бровь",
+    "interest_medium_1": "наклоняет голову",
+    "interest_medium_2": "приближается к курсору",
+    "interest_medium_3": "поднимает бровь",
+    "interest_strong_1": "наклоняет голову",
+    "interest_strong_2": "приближается к курсору",
+    "interest_strong_3": "поднимает бровь"
+   }
+  },
+  "tired": {
+   "clips": {
+    "tired_light_1": "потягивается",
+    "tired_light_2": "клюёт носом",
+    "tired_light_3": "садится",
+    "tired_medium_1": "потягивается",
+    "tired_medium_2": "клюёт носом",
+    "tired_medium_3": "садится",
+    "tired_strong_1": "потягивается",
+    "tired_strong_2": "клюёт носом",
+    "tired_strong_3": "садится"
+   }
+  },
+  "sad": {
+   "clips": {
+    "sad_light_1": "опускает уши/шапку",
+    "sad_light_2": "вздыхает",
+    "sad_light_3": "идёт медленно",
+    "sad_medium_1": "опускает уши/шапку",
+    "sad_medium_2": "вздыхает",
+    "sad_medium_3": "идёт медленно",
+    "sad_strong_1": "опускает уши/шапку",
+    "sad_strong_2": "вздыхает",
+    "sad_strong_3": "идёт медленно"
+   }
+  },
+  "surprise": {
+   "clips": {
+    "surprise_light_1": "отпрыгивает",
+    "surprise_light_2": "глаза широко",
+    "surprise_light_3": "знак !",
+    "surprise_medium_1": "отпрыгивает",
+    "surprise_medium_2": "глаза широко",
+    "surprise_medium_3": "знак !",
+    "surprise_strong_1": "отпрыгивает",
+    "surprise_strong_2": "глаза широко",
+    "surprise_strong_3": "знак !"
+   }
+  },
+  "embarrassed": {
+   "clips": {
+    "embarrassed_light_1": "прячет лицо",
+    "embarrassed_light_2": "краснеет",
+    "embarrassed_light_3": "поправляет шапку",
+    "embarrassed_medium_1": "прячет лицо",
+    "embarrassed_medium_2": "краснеет",
+    "embarrassed_medium_3": "поправляет шапку",
+    "embarrassed_strong_1": "прячет лицо",
+    "embarrassed_strong_2": "краснеет",
+    "embarrassed_strong_3": "поправляет шапку"
+   }
+  },
+  "pride": {
+   "clips": {
+    "pride_light_1": "выпрямляется",
+    "pride_light_2": "руки в боки",
+    "pride_light_3": "сияет",
+    "pride_medium_1": "выпрямляется",
+    "pride_medium_2": "руки в боки",
+    "pride_medium_3": "сияет",
+    "pride_strong_1": "выпрямляется",
+    "pride_strong_2": "руки в боки",
+    "pride_strong_3": "сияет"
+   }
+  },
+  "fear": {
+   "clips": {
+    "fear_light_1": "дрожит",
+    "fear_light_2": "прячется за краем",
+    "fear_light_3": "оглядывается",
+    "fear_medium_1": "дрожит",
+    "fear_medium_2": "прячется за краем",
+    "fear_medium_3": "оглядывается",
+    "fear_strong_1": "дрожит",
+    "fear_strong_2": "прячется за краем",
+    "fear_strong_3": "оглядывается"
+   }
+  },
+  "doubt": {
+   "clips": {
+    "doubt_light_1": "чешет затылок",
+    "doubt_light_2": "знак ?",
+    "doubt_light_3": "качает головой",
+    "doubt_medium_1": "чешет затылок",
+    "doubt_medium_2": "знак ?",
+    "doubt_medium_3": "качает головой",
+    "doubt_strong_1": "чешет затылок",
+    "doubt_strong_2": "знак ?",
+    "doubt_strong_3": "качает головой"
+   }
+  },
+  "gratitude": {
+   "clips": {
+    "gratitude_light_1": "кланяется",
+    "gratitude_light_2": "сердечко",
+    "gratitude_light_3": "машет",
+    "gratitude_medium_1": "кланяется",
+    "gratitude_medium_2": "сердечко",
+    "gratitude_medium_3": "машет",
+    "gratitude_strong_1": "кланяется",
+    "gratitude_strong_2": "сердечко",
+    "gratitude_strong_3": "машет"
+   }
+  },
+  "tenderness": {
+   "clips": {
+    "tenderness_light_1": "мягко улыбается",
+    "tenderness_light_2": "сердечки",
+    "tenderness_light_3": "греется",
+    "tenderness_medium_1": "мягко улыбается",
+    "tenderness_medium_2": "сердечки",
+    "tenderness_medium_3": "греется",
+    "tenderness_strong_1": "мягко улыбается",
+    "tenderness_strong_2": "сердечки",
+    "tenderness_strong_3": "греется"
+   }
+  },
+  "playful_anger": {
+   "clips": {
+    "playful_anger_light_1": "топает",
+    "playful_anger_light_2": "надувается",
+    "playful_anger_light_3": "облачко пара",
+    "playful_anger_medium_1": "топает",
+    "playful_anger_medium_2": "надувается",
+    "playful_anger_medium_3": "облачко пара",
+    "playful_anger_strong_1": "топает",
+    "playful_anger_strong_2": "надувается",
+    "playful_anger_strong_3": "облачко пара"
+   }
+  }
+ }
+}

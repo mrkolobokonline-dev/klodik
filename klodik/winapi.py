@@ -94,6 +94,7 @@ class Effects:
 
     def start(s, target): os.startfile(target)
     def lock(s): u32.LockWorkStation()
+    def restore(s, h): u32.ShowWindow(h, 9)                # для «верни как было» после свернуть/развернуть
     def sleep_pc(s): ctypes.windll.powrprof.SetSuspendState(0, 0, 0)
     def abort_shutdown(s): run_quiet(["shutdown", "/a"])
 

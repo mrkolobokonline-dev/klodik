@@ -27,6 +27,13 @@ class PetActions:
             targets.append({"w": w, "st": "wait", "l": l, "t": t, "max": w["max"] or r - l >= s.R - s.L - 20})
         if not targets:
             return s.say("Тут и так чисто!", 2)
+        action = "dozer_close" if mode == "close" else "dozer_minimize"
+        if s.decide(action) != "auto" and not getattr(s, "dozer_ok", False):
+            def go():
+                s.dozer_ok = True
+                s.start_dozer(mode)
+                s.dozer_ok = False
+            return s.gate(action, f"{'закрыть' if mode == 'close' else 'свернуть'} {len(targets)} окон бульдозером", go)
         s.dz = {"mode": mode, "targets": sorted(targets, key=lambda d: d.get("l", 0)), "n": 0}
         s.drop()
         s.bubble.hide()
@@ -69,6 +76,10 @@ class PetActions:
                     s.dz_act(tg)
             d.destroy()
             n, closed = s.dz["n"], s.dz["mode"] == "close"
+            s.log("dozer_close" if closed else "dozer_minimize", f"{n} окон", "сделано")
+            if not closed:                                # свёрнутые окна можно вернуть: «верни как было»
+                hw = [tg["w"]["hwnd"] for tg in s.dz["targets"] if tg["st"] == "done"]
+                s.push_undo(f"{n} окон", lambda hw=hw: [s.fx.restore(h) for h in hw])
             s.dozer = s.dz = None
             s.state, s.timer = "idle", 2
             s.x, s.y, s.vy = float(s.R - W - 60), float(s.T + 40), 0.0
@@ -107,11 +118,23 @@ class PetActions:
                 best, score = (tgt, nm, None), sc
         return best if score >= 0.75 else None
 
-    def plan(s, actions):
-        """Превращает команды в задания с анимацией: добежать → сделать."""
+    def describe(s, a):
+        do = a.get("do")
+        if do in ("close", "minimize", "maximize", "focus"):
+            w = s.snap.get(a.get("win"), {}) if isinstance(a.get("win"), int) else {}
+            verb = {"close": "закрыть", "minimize": "свернуть", "maximize": "развернуть", "focus": "показать"}[do]
+            return f"{verb} окно «{w.get('title', '?')[:40]}»"
+        return {"open": f"открыть {a.get('app')}", "url": f"открыть сайт {a.get('url', '')[:60]}",
+                "volume": "поменять громкость", "mute": "выключить/включить звук", "media": "управлять музыкой"}.get(do, do)
+
+    def plan(s, actions, gated=False):
+        """Превращает команды в задания с анимацией: добежать → сделать. Всё проходит политику доступа."""
         jobs, sx = [], max(s.L + W / 2, min(s.start_x, s.R - W / 2))
         for a in actions:
             do = a.get("do")
+            if not gated and s.decide(do) != "auto":          # не «сам» — спросить/запретить/подсказать
+                s.gate(do, s.describe(a), lambda a=a: s.plan([a], gated=True))
+                continue
             if do in ("close", "minimize", "maximize", "focus"):
                 try:
                     w = s.snap[int(a.get("win"))]
@@ -123,7 +146,9 @@ class PetActions:
                 h, title = w["hwnd"], w["title"][:40]
                 fn, msg = {"close": (s.fx.close, "Закрыл"), "minimize": (s.fx.minimize, "Свернул"),
                            "maximize": (s.fx.maximize, "Развернул"), "focus": (s.fx.focus, "Вот оно")}[do]
-                jobs.append({"x": x, "anim": "jump" if do in ("close", "maximize") else "dig",
+                undo = (lambda h=h: s.fx.restore(h)) if do in ("minimize", "maximize") else None
+                jobs.append({"x": x, "anim": "jump" if do in ("close", "maximize") else "dig", "action": do,
+                             "target": title, "undo": undo,
                              "run": lambda fn=fn, h=h, m=f"{msg}: «{title}»": (fn(h), m)[1]})
             elif do == "open":
                 res = s.resolve(a.get("app"))
@@ -131,13 +156,13 @@ class PetActions:
                     s.say(f"Не нашёл «{a.get('app')}»", 3)
                     continue
                 tgt, label, icon = res
-                jobs.append({"x": sx, "anim": "dig", "icon": icon,
+                jobs.append({"x": sx, "anim": "dig", "icon": icon, "action": "open", "target": label,
                              "run": lambda tgt=tgt, label=label: (s.fx.start(tgt), f"Запускаю {label}!")[1]})
             elif do == "url":
                 url = str(a.get("url", ""))
                 if not url.startswith(("http://", "https://")):
                     continue
-                jobs.append({"x": sx, "anim": "dig",
+                jobs.append({"x": sx, "anim": "dig", "action": "url", "target": url,
                              "run": lambda url=url: (s.fx.start(url), "Открываю в браузере")[1]})
             elif do in ("volume", "mute", "media"):
                 if do == "volume":
@@ -149,7 +174,9 @@ class PetActions:
                     vk = {"play": 0xB3, "next": 0xB0, "prev": 0xB1}.get(a.get("key"), 0xB3)
                     n, m = 1, "Музыка: есть!"
                 if n:
-                    jobs.append({"x": None, "anim": "dance",
+                    back = {0xAF: 0xAE, 0xAE: 0xAF, 0xAD: 0xAD, 0xB3: 0xB3}.get(vk)   # обратное действие для отката
+                    jobs.append({"x": None, "anim": "dance", "action": do, "target": m,
+                                 "undo": (lambda b=back, n=n: s.fx.keys(b, n)) if back else None,
                                  "run": lambda vk=vk, n=n, m=m: (s.fx.keys(vk, n), m)[1]})
         s.jobs += jobs
         if not s.job:
@@ -168,8 +195,11 @@ class PetActions:
         j = s.job
         try:
             msg = j["run"]()
+            if j.get("undo"):
+                s.push_undo(j.get("target", ""), j["undo"])
         except Exception as e:  # программа не нашлась, окно уже закрыто и т. п.
             msg = f"Не вышло: {e}"
+        s.log(j.get("action", "?"), j.get("target", ""), msg)
         s.say(msg, 3, j.get("icon"))
         if j.get("icon") or j["anim"] == "dig":
             s.carry = (j.get("icon") or "box", s.clock + 1.2)

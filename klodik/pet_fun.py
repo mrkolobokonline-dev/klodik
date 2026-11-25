@@ -75,6 +75,7 @@ class PetFun:
         return random.choice(PERSONAS.get(s.persona, PERSONAS["kind"])[2])
 
     def set_persona(s, p):
+        s.push_undo("характер", lambda prev=s.persona: s.set_persona(prev))
         s.persona = p
         if hasattr(s, "persona_var"):
             s.persona_var.set(p)
@@ -95,7 +96,7 @@ class PetFun:
         elif s.cur_game:
             played, name = time.time() - s.game_started, s.cur_game
             s.cur_game = None
-            if played > 600:
+            if played > 600 and s.on("game_talk") and not s.quiet_now():
                 s.root.after(4000, lambda: s.say(random.choice([
                     f"Как поиграл в {name}? {fmt_secs(played)} — серьёзно!", f"С возвращением из {name}! Победил?",
                     f"{name}: {fmt_secs(played)}. Рассказывай, как оно?"]), 6, speak=True))
@@ -129,7 +130,7 @@ class PetFun:
             if not s.meter.ok or s.meter.peak < 0.08:
                 s.state, s.timer = "idle", 2
                 return
-        if not s.meter.ok or s.speaker.speaking() or s.gaming:
+        if not s.meter.ok or s.speaker.speaking() or s.gaming or not s.on("dance"):
             return
         p = s.meter.peak
         if p > 0.08:

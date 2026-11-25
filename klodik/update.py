@@ -45,5 +45,24 @@ def install_update(url):
         if f.read(2) != b"MZ" or os.path.getsize(new) < 5 * 2**20:   # не exe или оборванная загрузка
             os.remove(new)
             raise RuntimeError("скачался не тот файл")
-    subprocess.Popen(f'cmd /c taskkill /f /im Klodik.exe >nul 2>&1 & timeout /t 2 /nobreak >nul & '
-                     f'move /y "{new}" "{exe}" >nul & start "" "{exe}"', creationflags=NOWIN | 0x8)
+    old, ok = os.path.join(INSTALL_DIR, "Klodik.old.exe"), OK_FLAG
+    script = os.path.join(DATA_DIR, "update.cmd")
+    # заменить → запустить → если за 60 с новая версия не отметилась «живу», вернуть старую
+    with open(script, "w", encoding="cp866", errors="replace") as f:
+        f.write(f'@echo off\r\ntaskkill /f /im Klodik.exe >nul 2>&1\r\ntimeout /t 2 /nobreak >nul\r\n'
+                f'del "{ok}" >nul 2>&1\r\nmove /y "{exe}" "{old}" >nul\r\nmove /y "{new}" "{exe}" >nul\r\n'
+                f'start "" "{exe}"\r\ntimeout /t 60 /nobreak >nul\r\n'
+                f'if not exist "{ok}" (\r\n  taskkill /f /im Klodik.exe >nul 2>&1\r\n  timeout /t 2 /nobreak >nul\r\n'
+                f'  move /y "{old}" "{exe}" >nul\r\n  start "" "{exe}"\r\n)\r\n')
+    subprocess.Popen(["cmd", "/c", script], creationflags=NOWIN | 0x8)
+
+
+OK_FLAG = os.path.join(DATA_DIR, "update_ok.flag")
+
+
+def mark_alive():
+    """Новая версия проработала 20 с — значит, запускается; откат не нужен."""
+    try:
+        open(OK_FLAG, "w").write(VERSION)
+    except OSError:
+        pass

@@ -244,17 +244,23 @@ class PetPC:
         if re.search(r"что\s+(?:жр[её]т|занимает)\s+(?:всё\s+)?место|куда делось место", seg):
             return s.space_report
         if re.search(r"^(?:заблокируй|блокировка|запри)\b", seg):
-            return lambda: (s.say("Блокирую. Пока!", 1, speak=True), s.root.after(800, s.fx.lock))
+            return lambda: s.gate("lock", "заблокировать экран", lambda: (
+                s.log("lock", "экран", "сделано"), s.say("Блокирую. Пока!", 1, speak=True), s.root.after(800, s.fx.lock)))
         if re.search(r"отмени\s+(?:выключение|перезагрузку)", seg):
-            return lambda: (s.fx.abort_shutdown(), s.say("Выключение отменил", 2, speak=True))
+            return lambda: (s.fx.abort_shutdown(), s.log("abort_shutdown", "", "сделано"),
+                            s.say("Выключение отменил", 2, speak=True))
         if m := re.search(r"(выключи|перезагрузи)\s+(?:комп\w*|пк|систему)(?:\s+через\s+(\d+)\s+(мин\w*|час\w*))?", seg):
             secs = int(m[2]) * (3600 if m[3] and m[3].startswith("час") else 60) if m[2] else 30
             restart = m[1].startswith("перезагр")
-            word = "Перезагрузить" if restart else "Выключить"
-            return lambda: s.ask_confirm(f"{word} компьютер через {fmt_secs(secs)}? Несохранённое пропадёт.",
-                                         lambda: (s.fx.shutdown(secs, restart),
-                                                  s.say(f"Ок, {'перезагрузка' if restart else 'выключение'} через "
-                                                        f"{fmt_secs(secs)}. Передумаешь — «отмени выключение».", 5, speak=True)))
+            word = "перезагрузить" if restart else "выключить"
+
+            def go():
+                s.fx.shutdown(secs, restart)
+                s.push_undo("выключение", s.fx.abort_shutdown)
+                s.say(f"Ок, {'перезагрузка' if restart else 'выключение'} через {fmt_secs(secs)}. "
+                      "Передумаешь — «отмени выключение».", 5, speak=True)
+            return lambda: s.gate("restart" if restart else "shutdown",
+                                  f"{word} компьютер через {fmt_secs(secs)} (несохранённое пропадёт)", go)
         if re.search(r"усыпи\s+комп|спящий режим|отправь\s+комп\w*\s+в\s+сон", seg):
-            return lambda: s.ask_confirm("Усыпить компьютер?", s.fx.sleep_pc)
+            return lambda: s.gate("sleep", "усыпить компьютер", s.fx.sleep_pc)
         return None

@@ -16,10 +16,14 @@ from .pet_tasks import PetTasks
 from .pet_smart import PetSmart
 from .pet_pc import PetPC
 from .pet_fun import PetFun
+from .pet_safety import PetSafety
+from .pet_onboard import PetOnboard
+from .pet_prefs import PetPrefs
 
 
 # ---------- сам Клодик ----------
-class Pet(PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld, PetTalk, PetActions):
+class Pet(PetSafety, PetOnboard, PetPrefs, PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld, PetTalk,
+          PetActions):
     def __init__(s, root, claude=None, fx=None, windows=list_windows, plats=platforms, frame=frame_rect):
         s.root, s.claude, s.fx, s.windows = root, claude or s.think, fx or Effects(), windows
         s.platforms_fn, s.frame_fn = plats, frame
@@ -54,12 +58,16 @@ class Pet(PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld, PetTalk, PetActi
         s.learned, s.last_fail, s.last_text, s._vocab = load_learned(), None, "", None
         if claude is None:
             threading.Thread(target=s.rescan, daemon=True).start()
+        s.access_level, s.pin, s.profile, s.prefs, s.ignore_ai_until = None, "", {}, {}, 0.0
         s.load()
+        s.safety_load()
         s.tasks_load()
         s.smart_load()
         s.pc_load()
         s.fun_load()
         s.persona_var = tk.StringVar(value=s.persona)
+        s.level_var = tk.StringVar(value=s.access_level)
+        s.onboard_load()                                   # первый запуск — знакомство
         s.hat_var, s.snow_var = tk.StringVar(value=s.hat), tk.StringVar(value=s.snow_mode)
         s.brain_var = tk.StringVar(value=s.brain)
         s.listen_var, s.tts_var = tk.BooleanVar(value=s.listen_on), tk.BooleanVar(value=s.tts_on)
@@ -204,7 +212,8 @@ class Pet(PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld, PetTalk, PetActi
         if s.every("look", 0.1) and not s.gaming:
             px, py = s.root.winfo_pointerxy()
             dx, dy = px - (s.x + W / 2), py - (s.y + H - 25)
-            s.look = ((0 if abs(dx) < 25 else (1 if dx > 0 else -1)), dy < -60) if abs(dx) < 700 and abs(dy) < 500 else None
+            s.look = (((0 if abs(dx) < 25 else (1 if dx > 0 else -1)), dy < -60)
+                      if abs(dx) < 700 and abs(dy) < 500 and s.on("eyes") else None)
         if s.every("remind", 0.5):
             s.check_reminders()
         if s.every("smart", 10):
@@ -238,6 +247,8 @@ class Pet(PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld, PetTalk, PetActi
                 s.clip_result(kind, text)
             elif kind == "files":
                 s.files_result(text)
+            elif not s.thinking and s.clock < s.ignore_ai_until:
+                pass                                          # ответ ИИ пришёл после «Стоп» — выбрасываем
             else:
                 s.thinking = False
                 cmd = re.match(r"\s*CMD:\s*(.+)", text) if kind == "ok" else None
@@ -421,7 +432,7 @@ class Pet(PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld, PetTalk, PetActi
             if st == "sleep":
                 s.say("Выспался!", 2)
             s.pick_next()
-        if st in ("walk", "idle") and random.random() < dt / 160:
+        if st in ("walk", "idle") and random.random() < dt / 160 and s.on("walk_talk") and not s.quiet_now():
             s.say(s.walk_phrase())                      # свежие фразы от ИИ (обновляются каждую ночь)
 
     # --- рисунок: пиксельный квадратик как логотип ---

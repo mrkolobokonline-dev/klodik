@@ -98,7 +98,7 @@ class PetSmart:
 
     def learn_facts(s, said):
         """После разговора тихо выписываю новые факты о тебе (в фоне, Ollama)."""
-        if not ABOUT_ME.search(said.lower()):
+        if not ABOUT_ME.search(said.lower()) or not s.on("learn_facts"):
             return
 
         def go():
@@ -151,6 +151,9 @@ class PetSmart:
     # --- итоги дня: дневник, свежие фразы, самообучение на ошибках ---
     def close_day(s):
         d = s.day or {}
+        if not s.on("diary"):                             # итоги выключены — просто начинаем новый день
+            s.day = {"date": today(), "cmds": {}, "fails": [], "chat": 0, "games": {}}
+            return s.day_save()
         games = ", ".join(f"{g} — {fmt_secs(t)}" for g, t in sorted(d.get("games", {}).items(), key=lambda x: -x[1])[:5])
         top = ", ".join(f"«{c}» ×{n}" for c, n in sorted(d.get("cmds", {}).items(), key=lambda x: -x[1])[:8])
         facts = s.memory_text()
@@ -218,7 +221,8 @@ class PetSmart:
         s.day["morning"] = today()
         s.day_save()
         h = time.localtime().tm_hour
-        hello = "Доброе утро!" if h < 12 else "Добрый день!" if h < 18 else "Добрый вечер!"
+        hello = "Доброе утро" if h < 12 else "Добрый день" if h < 18 else "Добрый вечер"
+        hello += f", {s.addr()}!" if s.addr() else "!"
         now = s.now()
         end_of_day = dt.datetime.combine(dt.date.today(), dt.time(23, 59)).timestamp()
         todays = [r for r in s.reminders if r["t"] <= end_of_day]
@@ -254,11 +258,18 @@ class PetSmart:
                 s.close_day()
                 s.closing = False
             threading.Thread(target=go, daemon=True).start()
-        if s.morning_due and time.localtime().tm_hour >= 5 and s.clock > 8 and not s.gaming and not s.busy:
+        if s.clock > 20 and not getattr(s, "alive_marked", False):
+            s.alive_marked = True
+            from .update import mark_alive
+            mark_alive()                                   # «новая версия запустилась» — откат не нужен
+            s.daily_backup()
+        if (s.morning_due and time.localtime().tm_hour >= 5 and s.clock > 8 and not s.gaming and not s.busy
+                and s.on("morning") and not s.quiet_now() and "name" in s.ob["done"]):
             s.morning()
         if not s.busy and not s.gaming:
-            s.diablo_hint() or s.hints()
-        if FROZEN and s.day.get("date") == today() and s.day.get("upd") != today() and s.clock > 60:
+            if s.on("hints") and not s.quiet_now():
+                (s.on("game_talk") and s.diablo_hint()) or s.hints()
+        if FROZEN and s.day.get("date") == today() and s.day.get("upd") != today() and s.clock > 60 and s.on("updates"):
             s.day["upd"] = today()                        # раз в день: нет ли новой версии
             s.day_save()
             s.check_update()

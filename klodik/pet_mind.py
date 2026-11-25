@@ -31,6 +31,10 @@ class PetMind:
             s.voice = d["voice"] if d.get("voice") in VOICES else "dmitri"
             s.voice_vol = int(d.get("vol", 40))
             s.persona = d.get("persona", "kind")
+            s.access_level = d.get("level")
+            s.pin = d.get("pin", "")
+            s.profile = d.get("profile", {})                   # имя, пол, язык, формы имени — из знакомства
+            s.prefs = d.get("prefs", {})                       # переключатели функций, тихие часы, анимации
         except (OSError, ValueError):
             pass
 
@@ -40,7 +44,9 @@ class PetMind:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump({"hunger": round(s.hunger, 1), "mood": round(s.mood, 1), "hat": s.hat, "snow": s.snow_mode,
                        "brain": s.brain, "listen": s.listen_on, "tts": s.tts_on, "voice": s.voice, "vol": s.voice_vol,
-                       "persona": getattr(s, "persona", "kind"), "t": time.time()}, f)
+                       "persona": getattr(s, "persona", "kind"), "level": getattr(s, "access_level", None),
+                       "pin": getattr(s, "pin", ""), "profile": getattr(s, "profile", {}),
+                       "prefs": getattr(s, "prefs", {}), "t": time.time()}, f)
         os.replace(tmp, common.STATE)
 
     # --- мозги: Ollama на компе (по умолчанию, бесплатно) → готовые фразы. Claude — только если выбрать руками. ---
@@ -166,12 +172,14 @@ class PetMind:
         s.say("Буду говорить вслух!" if on else "Молчу, только пишу.", 2, speak=on)
 
     def set_volume(s, vol):
+        s.push_undo("громкость голоса", lambda p=s.voice_vol: s.set_volume(p))
         s.voice_vol = s.speaker.volume = max(10, min(100, int(vol)))
         s.vol_var.set(s.voice_vol)
         s.save()
         s.say(f"Громкость голоса: {s.voice_vol}%", 2, speak=True)
 
     def set_voice(s, v):
+        s.push_undo("голос", lambda p=s.voice: s.set_voice(p))
         s.voice = v
         s.voice_var.set(v)
         s.speaker.set_voice(v)
@@ -282,6 +290,7 @@ class PetMind:
             s.send(text, voice=True, allow_chat=kind == "voice")
 
     def set_brain(s, b):
+        s.push_undo("мозг", lambda p=s.brain: s.set_brain(p))
         s.brain = b
         s.brain_var.set(b)
         s.save()
@@ -303,7 +312,8 @@ class PetMind:
         s.bubble.show(text, secs or max(3, min(25, len(text) / 12)), image)
         if speak is None:
             speak = s.clock < s.talk_until and len(text) >= 4 and not text.startswith(("«", "Думаю", "Слушаю"))
-        if speak and s.tts_on:
+        # в тихие часы вслух — только ответы на твою просьбу (будильники говорят сами в ring)
+        if speak and s.tts_on and (s.clock < s.talk_until or not s.quiet_now()):
             s.speaker.say(text)
 
     def mood_add(s, v):
@@ -329,6 +339,7 @@ class PetMind:
         return "winter" if time.localtime().tm_mon in (12, 1, 2) else "none"
 
     def set_hat(s, hat):
+        s.push_undo("шапка", lambda p=s.hat: s.set_hat(p))
         s.hat = hat
         s.hat_var.set(hat)
         s.key = None
@@ -336,6 +347,7 @@ class PetMind:
         s.say({"none": "Снял!", "auto": "Буду одеваться по погоде"}.get(hat, f"{HATS[hat]} — как я тебе?"), 2)
 
     def set_snow(s, mode):
+        s.push_undo("снег", lambda p=s.snow_mode: s.set_snow(p))
         s.snow_mode = mode
         s.snow_var.set(mode)
         s.save()

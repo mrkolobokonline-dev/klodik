@@ -47,7 +47,11 @@ class PetTalk:
         raw = text.strip()
         text = num_words(re.sub(r"[.!?]|пожалуйста|клодик,?", " ", text.lower()))
         text = re.sub(r"\b(запомни|забудь|напомни|запиши),\s*", r"\1 ", text)   # «запомни, что…» — одна команда
-        # фразы целиком (до разбивки по «и»/запятым): ответ на «точно?», новый режим, «напечатай …»
+        # фразы целиком (до разбивки по «и»/запятым): «Стоп», второе подтверждение, ответ на «точно?», …
+        if re.match(r"^\s*(?:стоп|стой|остановись|хватит всё|отмена всего|прекрати)\s*$", text) and not (s.game and not dry):
+            return True if dry else (s.stop_all() or True)
+        if not dry and getattr(s, "second", None) and s.check_second(text):
+            return True
         if not dry and s.confirm and s.answer_confirm(text.strip()):
             return True
         if not dry and s.game and s.game_input(text):          # ответ в мини-игре
@@ -65,7 +69,9 @@ class PetTalk:
             seg = re.sub(r"^(?:а |ну |слушай |давай |можешь |сделай |мне )+", "", seg.strip())
             m_num = re.search(r"на (\d+)", seg)
             step = max(1, min(10, int(m_num.group(1)) // 2)) if m_num else 5
-            if re.search(r"что (?:ты )?(?:можешь|умеешь) (?:запустить|открыть)|какие (?:у меня )?(?:программы|игры)", seg):
+            if fn := s.safety_command(seg):                      # «Стоп», «верни как было», журнал, уровень доступа
+                local.append(fn)
+            elif re.search(r"что (?:ты )?(?:можешь|умеешь) (?:запустить|открыть)|какие (?:у меня )?(?:программы|игры)", seg):
                 local.append(s.what_can_run)
             elif re.search(r"забудь (?:всё|все)? ?выученн", seg):
                 local.append(s.forget)
@@ -93,6 +99,8 @@ class PetTalk:
             elif fn := s.fun_command(seg):                      # мини-игры, характер, танцы, «сколько играл»
                 local.append(fn)
             elif fn := s.pc_command(seg):                       # режимы, буфер, файлы и папки, система
+                local.append(fn)
+            elif fn := s.onboard_command(seg):                  # «называй меня…», «что ещё можно подключить», импорт памяти
                 local.append(fn)
             elif fn := s.smart_command(seg):                    # память о тебе, итоги дня, сводка
                 local.append(fn)
@@ -131,7 +139,7 @@ class PetTalk:
                 acts.append({"do": "media", "key": "next"})
             elif re.search(r"предыдущ", seg):
                 acts.append({"do": "media", "key": "prev"})
-            elif re.search(r"пауз|^стоп|продолж|включи музык|играй музык", seg):
+            elif re.search(r"пауз|^стоп\s+музык|продолж|включи музык|играй музык", seg):   # «стоп» один — это «Стоп всего»
                 acts.append({"do": "media", "key": "play"})
             elif m := re.match(r"^(?:найди|загугли|погугли|поищи)\s+(?:в (?:гугле|интернете)\s+)?(.+)", seg):
                 acts.append({"do": "url", "url": "https://www.google.com/search?q=" + urllib.parse.quote(m[1])})
@@ -186,6 +194,7 @@ class PetTalk:
         if not text:
             return
         s.talk_until = s.clock + 12                           # что отвечу на эту просьбу — скажу вслух
+        s.request = (text, "голос" if voice else "текст")     # для журнала: кто и зачем попросил
         if s.understand(text):
             lf = s.last_fail                                  # переспросил по-другому и сработало — запомню
             if lf and s.clock - lf[1] < 40 and difflib.SequenceMatcher(None, lf[0], text.lower()).ratio() >= 0.5:

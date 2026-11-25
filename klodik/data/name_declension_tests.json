@@ -1,0 +1,61 @@
+{
+ "note": "тесты для склонения имён; неуверенную форму уточнять у владельца и запоминать",
+ "cases": [
+  {
+   "name": "Олексій",
+   "vocative": "Олексію",
+   "genitive": "Олексія",
+   "dative": "Олексієві/Олексію",
+   "lang": "uk"
+  },
+  {
+   "name": "Максим",
+   "vocative": "Максиме",
+   "genitive": "Максима",
+   "dative": "Максиму",
+   "lang": "uk"
+  },
+  {
+   "name": "Андрій",
+   "vocative": "Андрію",
+   "genitive": "Андрія",
+   "dative": "Андрієві/Андрію",
+   "lang": "uk"
+  },
+  {
+   "name": "Олексей",
+   "vocative": "Олексей",
+   "genitive": "Олексея",
+   "dative": "Олексею",
+   "lang": "ru"
+  },
+  {
+   "name": "Дмитро",
+   "vocative": "Дмитре",
+   "genitive": "Дмитра",
+   "dative": "Дмитру",
+   "lang": "uk"
+  },
+  {
+   "name": "Ігор",
+   "vocative": "Ігоре",
+   "genitive": "Ігоря",
+   "dative": "Ігорю",
+   "lang": "uk"
+  },
+  {
+   "name": "Саша",
+   "vocative": "Сашо",
+   "genitive": "Саші",
+   "dative": "Саші",
+   "lang": "uk"
+  },
+  {
+   "name": "Alex",
+   "vocative": "Alex",
+   "genitive": "Alex's",
+   "dative": "Alex",
+   "lang": "en"
+  }
+ ]
+}

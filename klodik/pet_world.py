@@ -7,6 +7,7 @@ from .brain import *  # noqa: F401,F403
 from .voice import *  # noqa: F401,F403
 from .sprites import *  # noqa: F401,F403
 from .tasks import fmt_when
+from .policy import LEVELS, POLICY_FILE
 
 from . import common  # noqa: E402
 
@@ -22,9 +23,27 @@ class PetWorld:
             m.add_command(label=f"⏰ {fmt_when(r['t'], s.now())}" + (f" — {r['text']}" if r["text"] else "")
                           + (f" (и ещё {len(s.reminders) - 1})" if len(s.reminders) > 1 else ""), command=s.timer_left)
             m.add_command(label="Отменить все напоминания", command=s.cancel_timers)
+        m.add_command(label="⛔ Стоп — прервать всё", command=s.stop_all)
+        if s.undo_stack:
+            m.add_command(label=f"↩ Верни как было: {s.undo_stack[-1][0][:30]}", command=s.undo)
         m.add_separator()
         m.add_command(label="Поговорить / попросить", command=s.open_input)
         m.add_command(label="Настройки и все команды…", command=s.open_settings)
+        safety = tk.Menu(m, tearoff=0)
+        for k, v in LEVELS.items():
+            safety.add_radiobutton(label=v, value=k, variable=s.level_var, command=lambda k=k: s.set_level(k))
+        safety.add_separator()
+        safety.add_command(label="Журнал действий…", command=s.journal_window)
+        safety.add_command(label="Открыть файл политики", command=lambda: s.fx.start(POLICY_FILE))
+        m.add_cascade(label="Доступ и безопасность", menu=safety)
+        m.add_cascade(label="Функции (вкл/выкл)", menu=s.feature_menu(m))
+        me = tk.Menu(m, tearoff=0)
+        me.add_command(label="Знакомство и подключения…", command=s.onboarding)
+        me.add_command(label="Что ты обо мне знаешь…", command=s.recall_window)
+        me.add_command(label="Импорт памяти…", command=s.memory_import_window)
+        me.add_command(label="Экспорт памяти", command=s.memory_export)
+        me.add_command(label="Сохранить копию всех данных", command=s.export_data)
+        m.add_cascade(label=f"Обо мне{', ' + s.addr() if s.addr() else ''}", menu=me)
         m.add_command(label=f"Список дел ({len(s.notes)})", command=s.notes_window)
         m.add_command(label="Покормить", command=s.feed)
         m.add_command(label="Убрать мячик" if s.ball else "Мячик", command=s.toggle_ball)
@@ -120,7 +139,7 @@ class PetWorld:
             return
         if s.ball and r < 0.7:
             s.state, s.timer = "chase", random.uniform(6, 16)
-        elif r < 0.14 and s.try_climb():
+        elif r < 0.14 and s.on("climb") and s.try_climb():
             pass
         elif r < 0.45:
             s.state, s.timer = "idle", random.uniform(1.6, 6.4)

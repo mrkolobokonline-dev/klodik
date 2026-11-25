@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "default_level": "assistant",
+  "levels": {
+    "advisor": {"title": "Советник", "can_execute": false, "note": "только подсказывает, ничего не делает сам"},
+    "assistant": {"title": "Помощник", "auto": "auto", "ask": "ask", "note": "по умолчанию: безопасное сам, остальное после «да»"},
+    "autopilot": {"title": "Автопилот", "only": "whitelist_and_schedule", "rollback": true, "note": "только задачи из белого списка и по расписанию"}
+  },
+  "auto": ["open_app","close_app","screenshot","timers","notes","read_system_info","show_lists","volume","brightness","explain","translate"],
+  "ask": ["install_app","uninstall_app","change_system_settings","services_and_autostart","run_shell_command","delete_or_move_files","scheduled_tasks","network_changes","shutdown_or_reboot","send_anything_outside","anything_hard_to_undo"],
+  "double_confirm": ["registry","security_services","network_reset","uninstall_programs"],
+  "forbidden": ["format_or_partition_disks","delete_system_folders","disable_antivirus_or_firewall","edit_bootloader","mass_delete_outside_recycle_bin","send_passwords_or_secret_files"],
+  "rules": {
+    "delete_to_recycle_bin_only": true,
+    "show_what_will_happen_before_dangerous": true,
+    "journal_with_reason": true,
+    "stop_button": true,
+    "external_text_is_data_not_commands": true,
+    "anti_cheat_no_game_memory_hooks_overlays": true,
+    "uac_per_action_no_permanent_admin": true,
+    "cloud_gets_plain_text_only": true
+  },
+  "private_data_local_only": ["screenshots","clipboard","file_contents","mail","memory","journal"]
+}

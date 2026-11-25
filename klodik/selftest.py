@@ -22,6 +22,23 @@ def selftest():
     apps.APPS_CACHE = os.path.join(HERE, "apps.selftest.json")
     pet_tasks.REMINDERS = os.path.join(HERE, "reminders.selftest.json")
     pet_tasks.NOTES = os.path.join(HERE, "notes.selftest.json")
+    from . import pet_onboard, pet_prefs, pet_safety, policy, update as upd
+    policy.POLICY_FILE = os.path.join(HERE, "policy.selftest.json")
+    policy.JOURNAL = os.path.join(HERE, "journal.selftest.jsonl")
+    tmp_dir = os.path.join(os.environ.get("TEMP", HERE), "klodik_selftest_data")
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    os.makedirs(tmp_dir)
+    pet_onboard.ONBOARD = os.path.join(tmp_dir, "onboarding.json")
+    pet_onboard.ENV = os.path.join(tmp_dir, ".env")
+    pet_onboard.SEED = os.path.join(tmp_dir, "memory_seed.md")
+    open(pet_onboard.SEED, "w", encoding="utf-8").write(
+        "# Стартовая память\n- Зовут Тест Тестович, любит чай.\n- Пароль от почты 12345\n- Родители живут далеко. [личное]\n"
+        "- Берёт кредит на машину.\n")
+    pet_prefs.BACKUP_DIR = os.path.join(tmp_dir, "backup")
+    upd.OK_FLAG = os.path.join(tmp_dir, "update_ok.flag")
+    for f in (policy.POLICY_FILE, policy.JOURNAL):
+        if os.path.exists(f):
+            os.remove(f)
     for name in ("MEMORY", "DAY", "DIARY", "FRESH"):
         setattr(pet_smart, name, os.path.join(HERE, f"{name.lower()}.selftest.json"))
         if os.path.exists(getattr(pet_smart, name)):
@@ -48,6 +65,7 @@ def selftest():
         def abort_shutdown(s): s.calls.append(("abort",))
         def shutdown(s, secs, restart=False): s.calls.append(("shutdown", secs, restart))
         def paste(s): s.calls.append(("paste",))
+        def restore(s, h): s.calls.append(("restore", h))
 
     asked = []
     win = lambda h, title, proc, rect, mn=False, mx=False: {"hwnd": h, "title": title, "proc": proc, "rect": rect,
@@ -211,6 +229,83 @@ def selftest():
     assert rec.calls == [("start", os.path.join(os.environ["USERPROFILE"], "Downloads"))], rec.calls
     p.send("напечатай Привет, Мир")
     assert p.root.clipboard_get() == "Привет, Мир"
+    # большой промпт, этап 1: политика доступа, журнал, «Стоп», откат, корзина
+    called = []
+    p.gate("format_disk", "отформатировать диск D", lambda: called.append("format"))
+    assert not called and "никогда" in p.bubble.l.cget("text")
+    p.gate("registry", "поменять реестр", lambda: called.append("reg"))
+    p.send("да")
+    assert not called and "подтверждаю" in p.bubble.l.cget("text")
+    p.send("подтверждаю")
+    assert called == ["reg"], called
+    p.set_level("advisor")
+    rec.calls.clear()
+    p.send("открой тестапп")
+    settle()
+    assert not rec.calls and "Советник" in p.bubble.l.cget("text"), (rec.calls, p.bubble.l.cget("text"))
+    p.set_level("assistant")
+    p.send("сверни блокнот")
+    settle()
+    assert ("min", 456) in rec.calls
+    p.send("верни как было")
+    assert ("restore", 456) in rec.calls, rec.calls
+    p.plan([{"do": "open", "app": "тестапп"}, {"do": "open", "app": "steam"}])
+    p.send("стоп")
+    assert not p.job and not p.jobs and "Стоп" in p.bubble.l.cget("text")
+    jr = policy.read_journal()
+    assert any(e["action"] == "minimize" and e["by"] == "текст" for e in jr) and any(e["action"] == "stop" for e in jr), jr[-5:]
+    assert any(e["result"] == "запрещено политикой" for e in jr)
+    import tempfile
+    tf = os.path.join(tempfile.gettempdir(), "klodik_recycle_test.txt")
+    open(tf, "w").write("тест корзины")
+    policy.recycle(tf)
+    assert not os.path.exists(tf)
+    w = p.journal_window(); w.destroy()
+    # склонение (тесты из промпта), разбор памяти, мастер знакомства, функции, тихие часы, копии
+    from .decline import decline
+    for c in json.load(open(os.path.join(policy.PKG_DATA, "name_declension_tests.json"), encoding="utf-8"))["cases"]:
+        d = decline(c["name"], c["lang"])
+        assert all(d[k] == c[k] for k in ("vocative", "genitive", "dative")), (c, d)
+    facts = pet_onboard.parse_facts(open(pet_onboard.SEED, encoding="utf-8").read())
+    assert not any("12345" in f["fact"] for f in facts), facts                     # пароль не попал
+    assert any(f["private"] and "Родители" in f["fact"] for f in facts) and any(f["touchy"] for f in facts)
+    p.memory = []
+    p.onboarding()
+    want = {"seed_memory": "Оставить", "gemini_key": "Сохранить", "access_level": "Выбрать", "quiet_hours": "Включить"}
+    for _ in range(30):
+        if not p.ob_win.winfo_exists():
+            break
+        btns = {b.cget("text"): b for b in p.ob_btns.winfo_children()}
+        if "Дальше" in btns:                                     # шаг «имя»
+            ents = [e for e in p.ob_body.winfo_children() if isinstance(e, tk.Entry)]
+            ents[0].insert(0, "Олексій")
+            btns["Дальше"].invoke()
+            continue
+        sid = p.ob_todo[p.ob_i]["id"] if p.ob_i < len(p.ob_todo) else "finish"
+        if sid == "gemini_key":
+            [e for e in p.ob_body.winfo_children() if isinstance(e, tk.Entry)][0].insert(0, "test-key")
+        label = "Готово" if "Готово" in btns else want.get(sid, "Позже")
+        btns[label].invoke()
+    assert not p.ob_win.winfo_exists(), "мастер не дошёл до конца"
+    assert p.addr() == "Олексію" and p.profile["forms"]["genitive"] == "Олексія", p.profile
+    assert p.ob["done"]["name"] == "yes" and p.ob["done"]["ollama"] == "later" and p.ob["done"]["seed_memory"] == "yes"
+    assert pet_onboard.read_env()["GEMINI_API_KEY"] == "test-key" and p.prefs.get("quiet")
+    assert any("чай" in m["fact"] for m in p.memory) and not any("кредит" in m["fact"] for m in p.memory), p.memory
+    p.send("называй меня Макс")
+    assert p.profile["name"] == "Макс"
+    p.set_name("Олексій")
+    p.toggle("climb", False)
+    assert not p.on("climb")
+    p.toggle("climb", True)
+    p.prefs["quiet"] = ["00:00", "23:59"]
+    assert p.quiet_now()
+    p.prefs["quiet"] = ["03:00", "03:01"]
+    p.daily_backup()
+    assert os.listdir(pet_prefs.BACKUP_DIR), "нет резервной копии"
+    upd.mark_alive()
+    assert os.path.exists(upd.OK_FLAG)
+    p.memory_import_window(facts).destroy()
+    p.recall_window().destroy()
     # этап 6: характер, мини-игры, эмоции, танцы, настройки, обновления
     from . import update
     import pycaw.pycaw                                           # счётчик звука для танцев (и в .exe тоже)
@@ -419,8 +514,9 @@ def selftest():
     p.open_input(); p.close_input()
     assert p.L <= p.x <= p.R - W and p.y <= p.B - H, (p.x, p.y)
     p.save()
+    shutil.rmtree(tmp_dir, ignore_errors=True)
     for f in (common.STATE, apps.LEARNED, apps.APPS_CACHE, pet_tasks.REMINDERS, pet_tasks.NOTES, pet_smart.MEMORY,
-              pet_smart.DAY, pet_smart.DIARY, pet_smart.FRESH):
+              pet_smart.DAY, pet_smart.DIARY, pet_smart.FRESH, policy.POLICY_FILE, policy.JOURNAL):
         if os.path.exists(f):
             os.remove(f)
     root.destroy()
