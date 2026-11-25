@@ -772,6 +772,42 @@ def selftest():
         assert p.play_command(cmd), cmd
     p.tictactoe().destroy(); p.reaction().destroy()
     p.costume_tick()
+    # этап 7: связь, режимы, каталог
+    from . import pet_link
+    up = {"message": {"chat": {"id": 42}, "from": {"id": 42}, "text": "открой steam"}}
+    assert pet_link.owner_msg(up, "42") == "открой steam"
+    assert pet_link.owner_msg({"message": {"chat": {"id": 7}, "from": {"id": 7}, "text": "скрин"}}, "42") is None
+    assert pet_link.kyiv_alert([{"alert_type": "air_raid", "location_title": "м. Київ"}], "м. Київ")
+    assert not pet_link.kyiv_alert([{"alert_type": "air_raid", "location_title": "Львівська область"}], "м. Київ")
+    p.tg_command("скрин")
+    sent = [p.tg_out.get_nowait() for _ in range(p.tg_out.qsize())]
+    assert any(k == "photo" and v.endswith("test.png") for k, v in sent), sent
+    assert policy.read_journal(1)[-1]["action"] == "screenshot"
+    p.tg_command("что на пк")
+    sent = [p.tg_out.get_nowait() for _ in range(p.tg_out.qsize())]
+    assert any("ПК" in v for _, v in sent), sent
+    p.tg_command("сколько будет 2+2")
+    assert any("4" in x[1] for x in iter(lambda: p.tg_out.get_nowait() if not p.tg_out.empty() else None, None))
+    p.tg_until = 0
+    p.alert_on = None
+    p.on_alert(False); p.on_alert(True)
+    assert "тревога" in p.bubble.l.cget("text")
+    p.on_alert(False)
+    assert "Отбой" in p.bubble.l.cget("text")
+    while not p.tg_out.empty():
+        p.tg_out.get_nowait()
+    anim0 = p.prefs.get("anim")
+    p.send("режим кино")
+    assert p.prefs["anim"] == "min" and p.prefs["working"]
+    p.send("кино всё")
+    assert p.prefs.get("anim") == anim0
+    p.send("профиль игра")
+    assert p.prefs["game_mode"] == "corner"
+    p.undo()
+    p.prefs["working"] = False
+    p.catalog().destroy(); p.whats_new().destroy()
+    assert p.prefs["seen_version"] == upd.VERSION
+    assert p.link_command("что ты умеешь") and p.link_command("импорт настроек") and p.link_command("профиль ночь")
     # игра на весь экран: прячется и дальше работает; ошибка в кадре не роняет
     p.fullscreen_app = lambda: True
     run(1.5)

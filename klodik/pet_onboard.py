@@ -297,7 +297,7 @@ class PetOnboard:
 
     def ob_telegram(s, st):
         tk.Label(s.ob_body, text="Токен даёт @BotFather (/newbot). Свой chat id покажет @userinfobot.\n"
-                                 "Хранится только на этом ПК. Управление с телефона появится на следующих этапах.",
+                                 "Хранится только на этом ПК. Слушаюсь только тебя (по chat id), заработает после перезапуска.",
                  bg=PAPER, fg=DARK, font=("Segoe UI", 9), justify="left").pack(anchor="w", pady=(0, 6))
         tok = s.ob_entry("Токен бота:", "", secret=True, width=44)
         cid = s.ob_entry("Твой chat id:", read_env().get("TELEGRAM_OWNER_CHAT_ID", ""))

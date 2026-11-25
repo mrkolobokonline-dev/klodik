@@ -27,10 +27,11 @@ from .ai import AI, parse_json
 from .pet_soul import PetSoul
 from .pet_desk import PetDesk
 from .pet_play import PetPlay
+from .pet_link import PetLink
 
 
 # ---------- сам Клодик ----------
-class Pet(PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
+class Pet(PetLink, PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
           PetWorld, PetTalk, PetActions):
     def __init__(s, root, claude=None, fx=None, windows=list_windows, plats=platforms, frame=frame_rect):
         s.root, s.claude, s.fx, s.windows = root, claude or s.think, fx or Effects(), windows
@@ -83,6 +84,7 @@ class Pet(PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, 
         s.soul_load()
         s.desk_load()
         s.play_load()
+        s.link_load()
         s.onboard_load()                                   # первый запуск — знакомство
         s.hat_var, s.snow_var = tk.StringVar(value=s.hat), tk.StringVar(value=s.snow_mode)
         s.brain_var = tk.StringVar(value=s.brain)
@@ -284,6 +286,10 @@ class Pet(PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, 
                 s.local_command(text)
             elif kind == "plugin_draft":
                 s.plugin_draft(text)
+            elif kind == "tg":
+                s.tg_command(text)
+            elif kind == "alert":
+                s.on_alert(text == "1")
             elif kind == "info_say":
                 s.say(text, 10, speak=True)
             elif kind == "bots":

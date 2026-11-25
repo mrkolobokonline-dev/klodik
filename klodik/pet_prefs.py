@@ -13,6 +13,7 @@ FEATURES = {
     "game_talk": ("Комментировать игры и напоминать про дейлики", True), "updates": ("Автообновление", True),
     "thoughts": ("Мысли вслух и вопросы обо мне", True), "rituals": ("Ритуалы (спокойной ночи, праздники)", True),
     "tracker": ("Тайм-трекер программ (только на компе)", True), "clip_history": ("История буфера (без паролей)", False),
+    "telegram": ("Telegram: управление с телефона (только твой ID)", True), "alerts": ("Воздушные тревоги (Киев)", True),
 }
 BACKUP_DIR = os.path.join(DATA_DIR, "backup")
 BACKUP_FILES = ("state.json", "memory.json", "learned.json", "reminders.json", "notes.json", "modes.json", "diary.json",
