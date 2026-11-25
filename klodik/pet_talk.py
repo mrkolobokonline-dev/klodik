@@ -102,6 +102,8 @@ class PetTalk:
                 local.append(lambda: s.set_listen(False))
             elif re.search(r"слушай меня|(?:включи|вруби)\s+(?:микрофон|уши)", seg):
                 local.append(lambda: s.set_listen(True))
+            elif fn := s.play_command(seg):                     # игровые таймеры и заметки, мини-игры, звуки, ИИ по буферу
+                local.append(fn)
             elif fn := s.desk_command(seg):                     # помодоро, буфер, стикеры, окна, порты, файлы, проекты, свет
                 local.append(fn)
             elif fn := s.soul_command(seg):                     # душа, сны, «ты живой?», настроение

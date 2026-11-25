@@ -89,6 +89,7 @@ class PetMind:
                 "\nЕсли фраза похожа на неправильно расслышанную команду Клодика (открой/закрой/сверни X, громче/тише, "
                 "найди X, напомни…, запиши…, разгреби все окна, сфоткай, позови друга) — положи правильную команду в "
                 "поле \"action\" строкой, а в \"text\" коротко скажи, что делаешь.")
+        out += "\nОтвечай подробно, по делу." if s.prefs.get("verbose") else "\nОтвечай коротко: 1–2 предложения."
         if rules:
             out += "\nПравила владельца (не нарушай): " + "; ".join(rules)
         return out
@@ -359,6 +360,8 @@ class PetMind:
     def hat_now(s):
         if s.hat != "auto":
             return s.hat
+        if getattr(s, "cos_hat", None):                   # косплей под игру на переднем плане
+            return s.cos_hat
         if is_night():
             return "nightcap"
         if 21 <= time.localtime().tm_hour < 23:

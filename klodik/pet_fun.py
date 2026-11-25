@@ -84,7 +84,7 @@ class PetFun:
             s.persona_var.set(p)
         s.save()
         s.say({"kind": "Снова добряк!", "sassy": "Ну что, теперь я дерзкий. Терпи!",
-               "butler": "К вашим услугам, сэр.", "pirate": "Йо-хо-хо! Теперь я пират!"}[p], 3, speak=True)
+               "butler": "К вашим услугам, сэр.", "pirate": "Йо-хо-хо! Теперь я пират!"}.get(p, PERSONAS[p][2][0]), 3, speak=True)
 
     # --- игры на компе ---
     def game_watch(s):

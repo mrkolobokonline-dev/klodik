@@ -44,7 +44,10 @@ def selftest():
     from . import pet_soul
     from .pet_soul import idle_seconds
     pet_soul.SOUL = os.path.join(tmp_dir, "soul.json")
-    from . import pet_desk
+    from . import pet_desk, pet_play
+    for n in ("COSTUMES", "GNOTES"):
+        setattr(pet_play, n, os.path.join(tmp_dir, n.lower() + ".json"))
+    pet_play.GUIDES, pet_play.NOISE = os.path.join(tmp_dir, "guides"), os.path.join(tmp_dir, "sounds")
     for n in ("CLIPS", "STICKERS", "TRACK", "PROJECTS", "IDEAS", "GUARD"):
         setattr(pet_desk, n, os.path.join(tmp_dir, n.lower() + ".json"))
     pet_brain.WEEKLY = os.path.join(tmp_dir, "weekly")
@@ -734,6 +737,41 @@ def selftest():
     p.guard_tick(); p.guard_tick()
     p.clips_window().destroy()
     p.desk_tick(10)
+    # этап 6: игры, голос и звук, ИИ-помощник
+    b = ["X", "X", "", "O", "", "", "", "", ""]
+    assert pet_play.ttt_move(b) == 2 and pet_play.ttt_winner(["X"] * 3 + [""] * 6) == "X"
+    assert pet_play.ttt_move(["X", "", "", "", "O", "", "", "", "X"]) in (1, 3, 5, 7)
+    assert pet_play.ttt_winner(["X", "O", "X", "X", "O", "O", "O", "X", "X"]) == "draw"
+    cf = os.path.join(tmp_dir, "t.csv")
+    open(cf, "w", encoding="utf-8").write("имя;сумма\nа;10\nб;30\n")
+    assert "2 строк" in pet_play.csv_summary(cf) and "среднее 20" in pet_play.csv_summary(cf)
+    wf = pet_play.make_noise(os.path.join(tmp_dir, "sounds", "rain.wav"), "rain", secs=1)
+    assert os.path.getsize(wf) > 40000
+    assert p.costumes["dota2"] == "wizard" and os.path.exists(pet_play.COSTUMES)
+    p.cos_hat = "wizard"
+    assert p.hat_now() == "wizard" or p.hat != "auto"
+    p.cos_hat = None
+    n = len(p.reminders)
+    p.send("таймер рошана")
+    assert len(p.reminders) == n + 2
+    p.send("кулдаун ульты 90 сек")
+    assert len(p.reminders) == n + 3
+    p.reminders = p.reminders[:n]
+    p.send("заметка про пуджа: хук через деревья")
+    p.send("что я записал про пуджа")
+    assert "хук" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    p.send("гайд по кракену")
+    assert "не буду выдумывать" in p.bubble.l.cget("text")
+    p.send("будь ворчуном")
+    assert p.persona == "grumpy" and "ворчлив" in p.personality()
+    p.send("отвечай подробнее")
+    assert "подробно" in p.personality()
+    p.send("будь добряком")
+    for cmd in ("крестики нолики", "кто быстрее", "белый шум", "метроном 90", "черновик ответа", "разбери csv",
+                "что играет", "топ игр", "какой командой узнать версию windows"):
+        assert p.play_command(cmd), cmd
+    p.tictactoe().destroy(); p.reaction().destroy()
+    p.costume_tick()
     # игра на весь экран: прячется и дальше работает; ошибка в кадре не роняет
     p.fullscreen_app = lambda: True
     run(1.5)

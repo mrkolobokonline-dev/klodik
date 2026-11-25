@@ -26,10 +26,11 @@ from .anim import EMO, Emotions, micro
 from .ai import AI, parse_json
 from .pet_soul import PetSoul
 from .pet_desk import PetDesk
+from .pet_play import PetPlay
 
 
 # ---------- сам Клодик ----------
-class Pet(PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
+class Pet(PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
           PetWorld, PetTalk, PetActions):
     def __init__(s, root, claude=None, fx=None, windows=list_windows, plats=platforms, frame=frame_rect):
         s.root, s.claude, s.fx, s.windows = root, claude or s.think, fx or Effects(), windows
@@ -81,6 +82,7 @@ class Pet(PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes
         s.brain_load()
         s.soul_load()
         s.desk_load()
+        s.play_load()
         s.onboard_load()                                   # первый запуск — знакомство
         s.hat_var, s.snow_var = tk.StringVar(value=s.hat), tk.StringVar(value=s.snow_mode)
         s.brain_var = tk.StringVar(value=s.brain)
@@ -245,6 +247,7 @@ class Pet(PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes
             s.daily_scene()
             s.soul_tick(10)
             s.desk_tick(10)
+            s.costume_tick()
         if s.every("palette", 0.08):
             s.palette_tick()
         if s.every("wake", 0.25):
