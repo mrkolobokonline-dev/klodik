@@ -1,5 +1,6 @@
 """Разговор и команды, таймеры, фото, друг."""
 from .looks import skins
+from .pet_brain import TASK_WORDS
 from .common import *  # noqa: F401,F403
 from .apps import *  # noqa: F401,F403
 from .winapi import *  # noqa: F401,F403
@@ -53,6 +54,10 @@ class PetTalk:
             return True if dry else (s.stop_all() or True)
         if not dry and getattr(s, "second", None) and s.check_second(text):
             return True
+        if not dry and not s.confirm and re.match(r"^\s*(?:нет|не надо|отстань|не предлагай)", text) and s.reject_hint():
+            return True                                         # «нет» на подсказку — больше её не предлагаю
+        if not dry and (fn := s.brain_command(text.strip(), raw)) and re.match(r"^\s*(?:напиши|сделай|создай)\s+плагин", text):
+            return fn() or True                                 # «напиши плагин …» — фраза целиком
         if not dry and s.confirm and s.answer_confirm(text.strip()):
             return True
         if not dry and s.game and s.game_input(text):          # ответ в мини-игре
@@ -102,6 +107,8 @@ class PetTalk:
             elif fn := s.fun_command(seg):                      # мини-игры, характер, танцы, «сколько играл»
                 local.append(fn)
             elif fn := s.pc_command(seg):                       # режимы, буфер, файлы и папки, система
+                local.append(fn)
+            elif fn := s.brain_command(seg, raw):               # поправки, правила, недельный отчёт, плагины, «только локально»
                 local.append(fn)
             elif fn := s.onboard_command(seg):                  # «называй меня…», «что ещё можно подключить», импорт памяти
                 local.append(fn)
@@ -215,6 +222,8 @@ class PetTalk:
         if not allow_chat:                                    # 20 с после команды — только команды, не болтовня
             s.emote("doubt", "light")
             return s.say(f"«{text}» — не понял", 2)
+        if TASK_WORDS.match(text.strip()) and s.brain != "none":   # задача на компе — план инструментами, а не болтовня
+            return s.plan_task(text)
         s.day_note("chat", "")
         s.learn_facts(text)                                   # тихо запомню, если ты рассказал что-то о себе
         s.ask_ai(text)

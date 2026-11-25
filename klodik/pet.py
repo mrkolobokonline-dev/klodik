@@ -21,12 +21,14 @@ from .pet_onboard import PetOnboard
 from .pet_prefs import PetPrefs
 from .looks import paint2, particles
 from .pet_scenes import PetScenes
-from .anim import Emotions, micro
+from .pet_brain import PetBrain
+from .anim import EMO, Emotions, micro
+from .ai import AI, parse_json
 
 
 # ---------- сам Клодик ----------
-class Pet(PetSafety, PetOnboard, PetPrefs, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind, PetWorld,
-          PetTalk, PetActions):
+class Pet(PetSafety, PetOnboard, PetPrefs, PetBrain, PetScenes, PetFun, PetPC, PetSmart, PetTasks, PetMind,
+          PetWorld, PetTalk, PetActions):
     def __init__(s, root, claude=None, fx=None, windows=list_windows, plats=platforms, frame=frame_rect):
         s.root, s.claude, s.fx, s.windows = root, claude or s.think, fx or Effects(), windows
         s.platforms_fn, s.frame_fn = plats, frame
@@ -53,6 +55,8 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetScenes, PetFun, PetPC, PetSmart, P
         s.alarm_until, s.beeps, s.photo_t = 0.0, [], None
         s.look, s.yawn_until = None, 0.0
         s.emo, s.pose, s.hook_id, s.vx = Emotions(), None, None, 0.0
+        s.emo_names = set(EMO["emotions"])
+        s.ai = AI(local_only=lambda: s.prefs.get("local_only", False))
         s.speaker, s.tts_on, s.talk_until, s.calib, s.voice = Speaker(), True, 0.0, None, "dmitri"
         s.voice_vol = 40
         load_profile()
@@ -72,6 +76,7 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetScenes, PetFun, PetPC, PetSmart, P
         s.persona_var = tk.StringVar(value=s.persona)
         s.level_var = tk.StringVar(value=s.access_level)
         s.scenes_load()
+        s.brain_load()
         s.onboard_load()                                   # первый запуск — знакомство
         s.hat_var, s.snow_var = tk.StringVar(value=s.hat), tk.StringVar(value=s.snow_mode)
         s.brain_var = tk.StringVar(value=s.brain)
@@ -258,6 +263,15 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetScenes, PetFun, PetPC, PetSmart, P
                 s.on_calib(kind, text)
             elif kind == "quiz":
                 s.quiz_got(text)
+            elif kind == "plan":
+                s.plan_ready(text)
+            elif kind == "plan_step":
+                s.say(text, 6, speak=text.startswith(("✗", "Готово")))
+                s.emote("pride" if text == "Готово!" else "doubt" if text.startswith("✗") else "interest", "light")
+            elif kind == "run_cmd":
+                s.local_command(text)
+            elif kind == "plugin_draft":
+                s.plugin_draft(text)
             elif kind == "fact":
                 s.remember(text, quiet=True)
             elif kind in ("clip_copy", "clip_say"):
@@ -268,6 +282,11 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetScenes, PetFun, PetPC, PetSmart, P
                 pass                                          # ответ ИИ пришёл после «Стоп» — выбрасываем
             else:
                 s.thinking = False
+                d = parse_json(text) if kind == "ok" else {}  # {"text", "emotion", "intensity", "action"}
+                if kind == "ok" and d.get("action") and isinstance(d["action"], str):
+                    text = "CMD: " + d["action"]              # модель угадала команду — как раньше
+                elif kind == "ok" and d.get("text"):
+                    text = str(d["text"])
                 cmd = re.match(r"\s*CMD:\s*(.+)", text) if kind == "ok" else None
                 if cmd:                                       # ИИ понял, какую команду я не расслышал
                     c = cmd[1].strip().strip("«»\"'")
@@ -281,8 +300,9 @@ class Pet(PetSafety, PetOnboard, PetPrefs, PetScenes, PetFun, PetPC, PetSmart, P
                     say = text.replace("**", "")
                     s.history.append(f"Клодик: {say}")
                     s.mood_add(2)
-                    s.say(say, speak=True)
-                    s.emote("joy", "light")
+                    s.say(("☁ " if s.ai.where == "cloud" else "") + say, speak=True)   # значок «облако»
+                    emo = d.get("emotion") if d.get("emotion") in s.emo_names else "joy"
+                    s.emote(emo, d.get("intensity") if d.get("intensity") in ("light", "medium", "strong") else "light")
                     s.state, s.timer = "idle", 1.0
                     s.vy = -230.0                         # подпрыгнуть от радости
                 else:

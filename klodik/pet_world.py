@@ -7,6 +7,7 @@ from .brain import *  # noqa: F401,F403
 from .voice import *  # noqa: F401,F403
 from .sprites import *  # noqa: F401,F403
 from .tasks import fmt_when
+from .pet_tasks import write_json
 from .policy import LEVELS, POLICY_FILE
 
 from . import common  # noqa: E402
@@ -37,6 +38,21 @@ class PetWorld:
         safety.add_command(label="Открыть файл политики", command=lambda: s.fx.start(POLICY_FILE))
         m.add_cascade(label="Доступ и безопасность", menu=safety)
         m.add_cascade(label="Функции (вкл/выкл)", menu=s.feature_menu(m))
+        pl = tk.Menu(m, tearoff=0)
+        for man in s.plugins:
+            v = tk.BooleanVar(value=man.get("enabled", True))
+
+            def flip(man=man, v=v):
+                man["enabled"] = v.get()
+                write_json(os.path.join(man["dir"], "plugin.json"), {k: x for k, x in man.items() if k != "dir"})
+            pl.add_checkbutton(label=f"{man['name']} — {man.get('description', '')[:40]}", variable=v, command=flip)
+        if s.plugins:
+            pl.add_separator()
+        pl.add_command(label="Как написать: скажи «напиши плагин, который …»", state="disabled")
+        pl.add_command(label="Правила из поправок…", command=lambda: s.say(
+            "Правила:\n" + "\n".join(r["text"] for r in s.rules) if s.rules else "Правил пока нет.", 8))
+        pl.add_command(label="Недельный отчёт", command=s.weekly_report)
+        m.add_cascade(label="Мозг: плагины и правила", menu=pl)
         me = tk.Menu(m, tearoff=0)
         me.add_command(label="Знакомство и подключения…", command=s.onboarding)
         me.add_command(label="Что ты обо мне знаешь…", command=s.recall_window)

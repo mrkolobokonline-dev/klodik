@@ -20,6 +20,8 @@ ACTION_CAT = {
     "shutdown": "shutdown_or_reboot", "restart": "shutdown_or_reboot", "sleep": "shutdown_or_reboot",
     "delete_file": "delete_or_move_files", "move_file": "delete_or_move_files",
     "install": "install_app", "uninstall": "uninstall_programs", "shell": "run_shell_command",
+    "brightness": "brightness", "network_changes": "network_changes", "change_system_settings": "change_system_settings",
+    "scheduled_tasks": "scheduled_tasks", "plugin_install": "anything_hard_to_undo",
     "registry": "registry", "network_reset": "network_reset", "format_disk": "format_or_partition_disks",
 }
 

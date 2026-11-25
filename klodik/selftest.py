@@ -37,6 +37,12 @@ def selftest():
         "# Стартовая память\n- Зовут Тест Тестович, любит чай.\n- Пароль от почты 12345\n- Родители живут далеко. [личное]\n"
         "- Берёт кредит на машину.\n")
     pet_prefs.BACKUP_DIR = os.path.join(tmp_dir, "backup")
+    from . import ai as ai_mod, pet_brain
+    for mod, names in ((pet_brain, ("RULES", "KB")), (ai_mod, ("CACHE", "USAGE"))):
+        for n in names:
+            setattr(mod, n, os.path.join(tmp_dir, n.lower() + ".json"))
+    pet_brain.WEEKLY = os.path.join(tmp_dir, "weekly")
+    pet_brain.PLUGINS = os.path.join(tmp_dir, "plugins")
     upd.OK_FLAG = os.path.join(tmp_dir, "update_ok.flag")
     for f in (policy.POLICY_FILE, policy.JOURNAL):
         if os.path.exists(f):
@@ -358,6 +364,94 @@ def selftest():
     assert p.root.winfo_viewable() and p.state == "sleep"
     p.set_gaming(False)
     p.set_pref("game_mode", "hide")
+    # этап 3: слой ИИ (облако/локально, лимиты, кэш, приватность), характер, план, поправки, плагины
+    from .ai import AI, parse_json
+    from . import tools as T
+    calls = []
+    a = AI()
+    ai_mod.env = lambda: {"GEMINI_API_KEY": "k"}
+    a.gemini = lambda *x: (calls.append("cloud"), '{"say":"ok"}')[1]
+    a.ollama = lambda *x, **kw: (calls.append("local"), '{"say":"ok"}')[1]
+    a.ask("s", "личное", task="chat", private=True)
+    a.ask("s", "план", task="plan", private=False)
+    a.ask("s", "план", task="plan", private=False)                 # повтор — из кэша
+    assert calls == ["local", "cloud"], calls
+    a.gemini = lambda *x: (_ for _ in ()).throw(OSError("429"))
+    assert a.ask("s", "другой план", task="plan", private=False) and calls[-1] == "local" and a.where == "local"
+    a.minute = [time.time()] * 8
+    assert not a.can_cloud()                                       # запас под лимит
+    ai_mod.env = lambda: {}
+    assert parse_json("вот: {\"text\": \"hi\"} ок")["text"] == "hi" and parse_json("просто")["text"] == "просто"
+    p.memory = [{"fact": "любит чай", "private": False}, {"fact": "служит", "private": True}]
+    sysp = p.personality()
+    assert "Олексію" in sysp and "служит" in sysp and "служит" not in p.personality(cloud=True)
+    p.claude = lambda prompt: '{"text": "Ого, привет!", "emotion": "surprise", "intensity": "strong"}'
+    p.send("как ты")
+    settle()
+    assert "Ого, привет!" in p.bubble.l.cget("text") and p.emo.clip and p.emo.clip["emo"] == "surprise"
+    rec_t = []
+    T.get_volume, T.set_volume = (lambda: 50), (lambda v: rec_t.append(("vol", v)))
+    T.get_theme, T.set_theme = (lambda: "light"), (lambda m: rec_t.append(("theme", m)))
+    p.ai.ask = lambda *x, **kw: json.dumps({"say": "Сделаю", "steps": [
+        {"tool": "set_volume", "args": {"percent": 30}, "why": "тише"},
+        {"tool": "theme", "args": {"mode": "dark"}, "why": "тёмная тема"}]}, ensure_ascii=False)
+    p.send("настрой тёмную тему")
+    for _ in range(100):
+        time.sleep(0.01); run(0.02)
+        if p.confirm:
+            break
+    assert p.confirm and "Выполнить план" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    p.send("да")
+    for _ in range(200):
+        time.sleep(0.01); run(0.02)
+        if ("theme", "dark") in rec_t:
+            break
+    assert rec_t == [("vol", 30), ("theme", "dark")], rec_t
+    run(0.2)
+    p.send("верни как было")
+    assert ("theme", "light") in rec_t
+    p.send("так не делай")
+    assert p.rules and p.rules[-1]["tool"] in ("theme", "undo"), p.rules
+    p.rules = [{"text": "не делать: theme", "tool": "theme", "target": "", "t": 0}]
+    rec_t.clear()
+    p.send("настрой тёмную тему")
+    for _ in range(100):
+        time.sleep(0.01); run(0.02)
+        if rec_t:
+            break
+    assert rec_t == [("vol", 30)] and not any(x[0] == "theme" for x in rec_t), rec_t   # правило: тему не трогать
+    assert T.tool_action("powershell", {"command": "Get-Date"}) == "pc_info"
+    assert p.decide(T.tool_action("powershell", {"command": "Remove-Item C:\\x"})) == "ask"
+    p.hinted, p.game_t, p.prefs["rejected"] = {}, 4 * 3600, []
+    p.hints()
+    assert p.last_hint and p.last_hint[0] == "game"
+    p.send("не надо")
+    assert "game" in p.prefs["rejected"]
+    p.hinted = {}
+    p.say("—", 1)
+    p.hints()
+    assert "3 часа" not in p.bubble.l.cget("text")
+    p.llm = lambda system, prompt, tokens=400: "1) узнал 2) починил"
+    p.weekly_report(show=False)
+    for _ in range(50):
+        time.sleep(0.02)
+        if os.path.isdir(pet_brain.WEEKLY) and os.listdir(pet_brain.WEEKLY):
+            break
+    assert os.listdir(pet_brain.WEEKLY)
+    pd = os.path.join(pet_brain.PLUGINS, "echo")
+    os.makedirs(pd)
+    open(os.path.join(pd, "plugin.py"), "w", encoding="utf-8").write(
+        "import os, sys\nprint('плагин:', sys.argv[1], 'песочница' if os.environ.get('KLODIK_SANDBOX') == '1' else '')\n")
+    pet_tasks.write_json(os.path.join(pd, "plugin.json"), {"name": "echo", "pattern": "эхо", "enabled": True})
+    p.plugins = p.load_plugins()
+    assert "песочница" in p.run_plugin(p.plugins[0], "тест", sandbox=True)
+    p.send("эхо привет")
+    for _ in range(200):
+        time.sleep(0.02); run(0.02)
+        if "плагин:" in p.bubble.l.cget("text"):
+            break
+    assert "плагин: эхо привет" in p.bubble.l.cget("text"), p.bubble.l.cget("text")
+    p.claude = lambda prompt: (asked.append(prompt), "привет")[1]
     p.state = "idle"
     p.recall_window().destroy()
     # этап 6: характер, мини-игры, эмоции, танцы, настройки, обновления

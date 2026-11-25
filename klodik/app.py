@@ -26,6 +26,17 @@ def main():
         return
     if "--make-icon" in sys.argv:
         return make_icon(sys.argv[-1])
+    if "--plugin" in sys.argv:                              # плагин — в отдельном процессе (и в .exe тоже)
+        import runpy
+        i = sys.argv.index("--plugin")
+        path, text = sys.argv[i + 1], (sys.argv[i + 2] if len(sys.argv) > i + 2 else "")
+        if sys.stdout is None:                                # .exe без консоли: пишем в трубу, которую дал Клодик
+            try:
+                sys.stdout = sys.stderr = open(1, "w", encoding="utf-8", closefd=False)
+            except OSError:
+                sys.stdout = sys.stderr = open(os.devnull, "w")
+        sys.argv = [path, text]
+        return runpy.run_path(path, run_name="__main__")
     if "--uninstall" in sys.argv:
         return uninstall()
     if FROZEN and os.path.normcase(sys.executable) != os.path.normcase(os.path.join(INSTALL_DIR, "Klodik.exe")):

@@ -8,6 +8,8 @@ from .voice import *  # noqa: F401,F403
 from .sprites import *  # noqa: F401,F403
 
 from . import common  # noqa: E402
+from .policy import PKG_DATA  # noqa: E402
+from .pet_fun import PERSONAS  # noqa: E402
 
 
 class PetMind:
@@ -61,12 +63,35 @@ class PetMind:
                     os.startfile(ollama_exe())
                     return "Бужу свои мозги… Спроси ещё раз секунд через 20."
                 return "Мозги (Ollama) не установлены. Скачай с ollama.com — и я начну болтать."
-            model = pick_model(models)
-            if model:
-                return ask_ollama(prompt, model, s.persona_prompt())   # с выбранным характером
+            if pick_model(models):
+                # болтовня — личное (в ней память о тебе), поэтому только локально; ответ — JSON с эмоцией
+                return s.ai.ask(s.personality(), prompt, task="chat", private=True, want_json=True, tokens=220)
             threading.Thread(target=s.pull_model, daemon=True).start()
             return "Качаю себе мозги (несколько ГБ, один раз). Минут через 5–15 смогу болтать!"
         return random.choice(CANNED)
+
+    def personality(s, cloud=False):
+        """Системный промт характера из data/personality_prompt.md: имя, падежи, черты, память (+ команды Клодика).
+        cloud=True — без личных фактов (в облако идёт только безобидное)."""
+        tpl = open(os.path.join(PKG_DATA, "personality_prompt.md"), encoding="utf-8").read()
+        p = s.profile or {}
+        f = p.get("forms", {})
+        facts = [m["fact"] for m in s.memory if not (cloud and m.get("private"))][-25:]
+        rules = [r["text"] for r in getattr(s, "rules", [])][-10:]
+        out = (tpl.replace("{имя}", p.get("name") or "владельца")
+               .replace("{падежи}", f"обращение «{f.get('vocative', '')}», родительный «{f.get('genitive', '')}», "
+                                    f"дательный «{f.get('dative', '')}»" if f else "уточни при знакомстве")
+               .replace("{черты}", PERSONAS.get(getattr(s, "persona", "kind"), PERSONAS["kind"])[1])
+               .replace("{память}", "; ".join(facts) if facts and not cloud else "—"))
+        lang = {"ru": "русском", "uk": "украинском", "en": "английском"}.get(p.get("lang", "ru"), "русском")
+        out += (f"\nЯзык ответа: пиши на {lang} (так выбрал владелец), если он сам не заговорил на другом. "
+                "Грамотно, без опечаток и выдуманных слов."
+                "\nЕсли фраза похожа на неправильно расслышанную команду Клодика (открой/закрой/сверни X, громче/тише, "
+                "найди X, напомни…, запиши…, разгреби все окна, сфоткай, позови друга) — положи правильную команду в "
+                "поле \"action\" строкой, а в \"text\" коротко скажи, что делаешь.")
+        if rules:
+            out += "\nПравила владельца (не нарушай): " + "; ".join(rules)
+        return out
 
     def pull_model(s):
         if s.pulling:

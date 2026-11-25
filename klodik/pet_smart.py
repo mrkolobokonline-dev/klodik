@@ -133,8 +133,11 @@ class PetSmart:
         now, hour = time.time(), time.localtime().tm_hour
 
         def once(key, every, text):
+            if key in s.prefs.get("rejected", []):          # ты сказал «не надо» — не предлагаю
+                return False
             if now - s.hinted.get(key, 0) > every:
                 s.hinted[key] = now
+                s.last_hint = (key, s.clock)
                 s.say(text, 8, speak=True)
                 return True
         if s.game_t > 3 * 3600 and once("game", 3 * 3600, "Ты уже 3 часа в игре — может, перерыв и водички?"):
@@ -263,6 +266,11 @@ class PetSmart:
             from .update import mark_alive
             mark_alive()                                   # «новая версия запустилась» — откат не нужен
             s.daily_backup()
+        if (s.clock > 300 and time.time() - s.prefs.get("weekly_last", time.time() - 6 * 86400) > 7 * 86400
+                and not s.quiet_now() and not s.gaming and s.on("diary")):
+            s.prefs["weekly_last"] = time.time()          # раз в неделю: что узнал, что починил, что предлагаю
+            s.save()
+            s.weekly_report()
         if (s.morning_due and time.localtime().tm_hour >= 5 and s.clock > 8 and not s.gaming and not s.busy
                 and s.on("morning") and not s.quiet_now() and "name" in s.ob["done"]):
             s.morning()

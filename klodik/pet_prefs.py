@@ -60,7 +60,8 @@ class PetPrefs:
                 sub.add_radiobutton(label=label, value=val, variable=var,
                                     command=lambda key=key, var=var: s.set_pref(key, var.get()))
             m.add_cascade(label=title, menu=sub)
-        for key, title in (("no_emotions", "Режим без эмоций"), ("working", "Режим «я работаю»")):
+        for key, title in (("no_emotions", "Режим без эмоций"), ("working", "Режим «я работаю»"),
+                           ("local_only", "ИИ: только локально (без облака)")):
             v = s.feat_vars[key] = tk.BooleanVar(value=bool(s.prefs.get(key)))
             m.add_checkbutton(label=title, variable=v, command=lambda key=key, v=v: s.set_pref(key, v.get()))
         return m
