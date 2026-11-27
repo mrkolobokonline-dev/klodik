@@ -366,7 +366,8 @@ class Listener:
         try:
             import sounddevice as sd
             import vosk
-        except ImportError:
+        except ImportError as e:
+            log_error(f"уши: нет пакета ({e})")
             return s.out.put(("info", "Для голоса не хватает пакетов vosk и sounddevice"))
         small = os.path.join(DATA_DIR, VOSK_MODEL)
         if not os.path.isdir(small):

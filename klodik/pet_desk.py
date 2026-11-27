@@ -96,6 +96,7 @@ class PetDesk:
     def pomodoro(s, stop=False):
         if stop:
             s.pomo = None
+            s.prefs["working"] = False
             return s.say("Помодоро остановил.", 3, speak=True)
         s.pomo = {"phase": "work", "end": time.time() + 25 * 60, "n": 0}
         s.emote("interest", "medium")
@@ -508,8 +509,26 @@ class PetDesk:
         s.say(" ".join(parts), 10, speak=True)
         s.root.after(4000, s.sleep)
 
+    def props_tick(s):
+        """Друг и мячик не живут вечно: друг уходит через 20 мин, мячик убирается через 10 (и сразу, если тебя нет)."""
+        away = idle_away()
+        for name, life in (("buddy", 1200), ("ball", 600)):
+            obj, key = getattr(s, name), f"{name}_since"
+            if not obj:
+                s.__dict__.pop(key, None)
+                continue
+            since = s.__dict__.setdefault(key, s.clock)
+            if s.clock - since > life or (away and s.clock - since > 120):
+                s.__dict__.pop(key, None)
+                if name == "buddy":
+                    s.dismiss_buddy()                      # сам скажет «Пока, дружище!» и уйдёт
+                else:
+                    s.ball.destroy()
+                    s.ball = None
+
     def desk_tick(s, secs):
         """Раз в 10 с."""
+        s.props_tick()
         s.pomo_tick()
         s.track_tick(secs)
         s.project_tick()

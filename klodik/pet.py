@@ -362,6 +362,16 @@ class Pet(PetLink, PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, P
         u32.GetClassNameW(h, cls, 64)
         if pid.value == os.getpid() or cls.value in ("Progman", "WorkerW", "Shell_TrayWnd"):  # рабочий стол — не игра
             return False
+        if s.covers_screen(h):
+            return True
+        # видео на весь экран, а фокус в другом окне: смотрим, какое окно лежит поверх панели задач внизу экрана
+        below = u32.WindowFromPoint(wt.POINT(u32.GetSystemMetrics(0) // 2, u32.GetSystemMetrics(1) - 2))
+        top = u32.GetAncestor(below, 2) if below else 0           # GA_ROOT
+        cls = ctypes.create_unicode_buffer(64)
+        u32.GetClassNameW(top, cls, 64)
+        return bool(top) and cls.value not in ("Progman", "WorkerW", "Shell_TrayWnd") and s.covers_screen(top)
+
+    def covers_screen(s, h):
         r = wt.RECT()
         u32.GetWindowRect(h, ctypes.byref(r))
         return r.left <= 0 and r.top <= 0 and r.right >= u32.GetSystemMetrics(0) and r.bottom >= u32.GetSystemMetrics(1)

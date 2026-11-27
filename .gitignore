@@ -1,5 +1,6 @@
 # сборки
 dist/
+vendor/
 build/
 *.spec
 __pycache__/

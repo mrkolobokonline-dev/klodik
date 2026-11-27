@@ -737,6 +737,20 @@ def selftest():
     p.guard_tick(); p.guard_tick()
     p.clips_window().destroy()
     p.desk_tick(10)
+    p.toggle_ball()
+    assert p.ball
+    p.props_tick()
+    p.ball_since = p.clock - 601
+    p.props_tick()
+    assert p.ball is None
+    p.call_buddy()
+    p.props_tick()
+    p.buddy_since = p.clock - 1201
+    p.props_tick()
+    assert "Пока" in p.bubble.l.cget("text")
+    p.pomodoro(); p.pomodoro(stop=True)
+    assert not p.prefs["working"]
+    assert isinstance(p.fullscreen_app(), bool)
     # этап 6: игры, голос и звук, ИИ-помощник
     b = ["X", "X", "", "O", "", "", "", "", ""]
     assert pet_play.ttt_move(b) == 2 and pet_play.ttt_winner(["X"] * 3 + [""] * 6) == "X"
