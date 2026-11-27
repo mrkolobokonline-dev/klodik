@@ -751,6 +751,16 @@ def selftest():
     p.pomodoro(); p.pomodoro(stop=True)
     assert not p.prefs["working"]
     assert isinstance(p.fullscreen_app(), bool)
+    p.thinking, p.think_t = True, None
+    run(0.2)
+    p.think_t = p.clock - 61
+    run(0.2)
+    assert not p.thinking and "не ответили" in p.bubble.l.cget("text")
+    p.thinking = True
+    p.on_voice("wake")
+    assert not p.thinking
+    p.ignore_ai_until = 0
+    assert p.ai.slow_until == 0.0
     # этап 6: игры, голос и звук, ИИ-помощник
     b = ["X", "X", "", "O", "", "", "", "", ""]
     assert pet_play.ttt_move(b) == 2 and pet_play.ttt_winner(["X"] * 3 + [""] * 6) == "X"

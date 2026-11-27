@@ -294,6 +294,8 @@ class PetMind:
     def on_voice(s, kind, text=""):
         if kind == "wake":
             s.speaker.hush()                                   # позвали — замолкаю и слушаю
+            if s.thinking:                                     # новая просьба важнее старого «Думаю…»
+                s.stop_thinking()
             if s.state == "sleep":
                 s.state, s.timer = "idle", 3
             s.carry = ("mic", s.clock + 8)

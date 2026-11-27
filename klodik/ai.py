@@ -34,6 +34,7 @@ class AI:
         except (OSError, ValueError):
             s.usage = {}
         s.minute = []
+        s.slow_until = 0.0                         # умная модель тормозит (игра заняла видеокарту) — до этого времени быстрая
 
     # --- учёт лимитов Gemini ---
     def can_cloud(s):
@@ -81,10 +82,14 @@ class AI:
         msg = {"role": "user", "content": prompt}
         if image:
             msg["images"] = [base64.b64encode(open(image, "rb").read()).decode()]
+        t0 = time.time()
         d = ollama_call("/api/chat", {"model": model, "stream": False, "keep_alive": "10m",
                                       **({"format": "json"} if want_json else {}),
                                       "options": {"num_predict": tokens, "temperature": 0.7},
                                       "messages": [{"role": "system", "content": system}, msg]}, 300)
+        if smart and not image and time.time() - t0 > 20:
+            s.slow_until = time.time() + 600
+            log_error(f"Ollama {model} ответила за {time.time() - t0:.0f} с — 10 минут болтаю быстрой моделью")
         return d["message"]["content"].strip()
 
     def ask(s, system, prompt, task="chat", private=True, want_json=False, tokens=400, image=None):
@@ -106,7 +111,7 @@ class AI:
             except (OSError, ValueError, KeyError, IndexError) as e:   # лимит 429, нет сети, сбой — идём локально
                 log_error(f"Gemini: {e} — переключаюсь на Ollama")
         if ans is None:
-            ans = s.ollama(system, prompt, want_json, tokens, smart=task != "fast", image=image)   # умная — на видеокарте быстро
+            ans = s.ollama(system, prompt, want_json, tokens, smart=task != "fast" and time.time() > s.slow_until, image=image)   # умная — на видеокарте быстро
             s.where = "local"
         if task != "chat":
             s.cache[key] = {"t": time.time(), "a": ans, "w": s.where}

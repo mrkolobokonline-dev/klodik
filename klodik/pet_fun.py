@@ -94,7 +94,7 @@ class PetFun:
             pid = wt.DWORD()
             u32.GetWindowThreadProcessId(h, ctypes.byref(pid))
             name = os.path.splitext(proc_name(pid.value))[0]
-            if name and not s.cur_game:
+            if name and name.lower() not in NOT_GAMES and not s.cur_game:
                 s.cur_game, s.game_started = game_name(name), time.time()
         elif s.cur_game:
             played, name = time.time() - s.game_started, s.cur_game

@@ -57,7 +57,7 @@ class Pet(PetLink, PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, P
         s.jobs, s.job, s.job_phase, s.job_t, s.job_fired, s.carry = [], None, "", 0.0, False, None
         s.surface, s.surf, s.plats, s.edge_go, s.climb = None, None, [], False, None
         s.alarm_until, s.beeps, s.photo_t = 0.0, [], None
-        s.look, s.yawn_until = None, 0.0
+        s.look, s.yawn_until, s.think_t = None, 0.0, None
         s.emo, s.pose, s.hook_id, s.vx = Emotions(), None, None, 0.0
         s.emo_names = set(EMO["emotions"])
         s.ai = AI(local_only=lambda: s.prefs.get("local_only", False))
@@ -335,7 +335,14 @@ class Pet(PetLink, PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, P
                     s.state, s.timer = "idle", 1.6
         except queue.Empty:
             pass
-        if s.thinking:
+        if not s.thinking:
+            s.think_t = None
+        elif s.think_t is None:
+            s.think_t = t
+        elif t - s.think_t > 60:                          # мозги зависли (Ollama занята/грузится) — не висим вечно
+            s.stop_thinking()
+            s.say("Мозги не ответили за минуту — наверное, Ollama занята. Спроси ещё раз.", 5)
+        else:
             s.say("Думаю" + "." * (1 + int(t * 3) % 3), 1)
         if is_night() and s.state == "idle" and random.random() < dt / 480:
             s.yawn_until = t + 1.6
@@ -351,6 +358,13 @@ class Pet(PetLink, PetPlay, PetDesk, PetSoul, PetSafety, PetOnboard, PetPrefs, P
         s.place()
         s.bubble.follow(s.x + W / 2, s.y + 32, s.L, s.R)
         s.draw()
+
+    def stop_thinking(s):
+        """Бросить ожидание ответа ИИ: поздний ответ выбросим (правило «после Стоп»)."""
+        s.thinking, s.think_t = False, None
+        s.ignore_ai_until = s.clock + 300
+        if s.state == "idle" and s.timer > 1000:
+            s.timer = 1.0
 
     def fullscreen_app(s):
         h = u32.GetForegroundWindow()

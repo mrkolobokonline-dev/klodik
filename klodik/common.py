@@ -155,6 +155,11 @@ def is_night():
     return time.localtime().tm_hour >= 23 or time.localtime().tm_hour < 6
 
 
+# полноэкранные, но не игры: браузеры и видеоплееры (YouTube на весь экран — это не «поиграл»)
+NOT_GAMES = {"firefox", "chrome", "msedge", "opera", "opera_gx", "brave", "vivaldi", "browser", "vlc", "mpc-hc64",
+             "mpc-hc", "potplayermini64", "mpv", "wmplayer", "video.ui", "telegram", "discord", "obs64"}
+
+
 def work_area():
     # shortcut: только основной монитор; для нескольких мониторов брать MonitorFromWindow
     r = wt.RECT()
