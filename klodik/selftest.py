@@ -344,6 +344,7 @@ def selftest():
     cv.destroy()
     p.send("надень шлем космонавта")
     assert p.hat == "astronaut", p.hat
+    p.emo.clip = None                                       # фоновая эмоция с большим приоритетом не должна мешать
     p.send("покажи радость")
     assert p.emo.clip and p.emo.clip["emo"] == "joy"
     p.send("спасибо")
@@ -751,6 +752,9 @@ def selftest():
     p.pomodoro(); p.pomodoro(stop=True)
     assert not p.prefs["working"]
     assert isinstance(p.fullscreen_app(), bool)
+    p.menu.tk_popup = lambda x, y: None                    # меню собираем, но не показываем
+    p.popup(type("E", (), {"x_root": 0, "y_root": 0})())
+    assert p.menu.index("end") + 1 <= 10, p.menu.index("end")   # короткое: главное + 5 подменю
     p.thinking, p.think_t = True, None
     run(0.2)
     p.think_t = p.clock - 61

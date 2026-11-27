@@ -1,5 +1,6 @@
 """Меню и прогулки по окнам."""
 from .common import *  # noqa: F401,F403
+from .pet_onboard import SEED, parse_facts
 from .apps import *  # noqa: F401,F403
 from .winapi import *  # noqa: F401,F403
 from .monitor import *  # noqa: F401,F403
@@ -16,94 +17,113 @@ from . import common  # noqa: E402
 class PetWorld:
     # --- меню ---
     def popup(s, e):
+        """Короткое меню: сверху главное, остальное — в 5 подменю."""
         m = s.menu
         m.delete(0, "end")
-        m.add_command(label=f"Сытость {100 - s.hunger:.0f}% · Настроение {s.mood:.0f}%", state="disabled")
+        sub = lambda: tk.Menu(m, tearoff=0)               # noqa: E731
         if s.reminders:
             r = s.reminders[0]
-            m.add_command(label=f"⏰ {fmt_when(r['t'], s.now())}" + (f" — {r['text']}" if r["text"] else "")
-                          + (f" (и ещё {len(s.reminders) - 1})" if len(s.reminders) > 1 else ""), command=s.timer_left)
-            m.add_command(label="Отменить все напоминания", command=s.cancel_timers)
-        m.add_command(label="⛔ Стоп — прервать всё", command=s.stop_all)
+            m.add_command(label=f"⏰ {fmt_when(r['t'], s.now())}" + (f" — {r['text'][:30]}" if r["text"] else "")
+                          + (f" (+{len(s.reminders) - 1})" if len(s.reminders) > 1 else ""), command=s.timer_left)
+        if s.busy or s.jobs or s.thinking or s.dozer:
+            m.add_command(label="⛔ Стоп", command=s.stop_all)
         if s.undo_stack:
-            m.add_command(label=f"↩ Верни как было: {s.undo_stack[-1][0][:30]}", command=s.undo)
-        m.add_separator()
-        m.add_command(label="Поговорить / попросить", command=s.open_input)
-        m.add_command(label="Настройки и все команды…", command=s.open_settings)
-        safety = tk.Menu(m, tearoff=0)
+            m.add_command(label=f"↩ Верни: {s.undo_stack[-1][0][:25]}", command=s.undo)
+        m.add_command(label="💬 Поговорить", command=s.open_input)
+
+        play = sub()
+        play.add_command(label="Покормить", command=s.feed)
+        play.add_command(label="Убрать мячик" if s.ball else "Мячик", command=s.toggle_ball)
+        play.add_command(label="Прогнать друга" if s.buddy else "Позвать друга",
+                         command=s.dismiss_buddy if s.buddy else s.call_buddy)
+        play.add_command(label="Спрыгнуть с окна" if s.surface else "Залезть на окно",
+                         command=s.drop if s.surface else lambda: s.try_climb() or s.say("Некуда залезть", 2))
+        play.add_command(label="Крестики-нолики", command=s.tictactoe)
+        play.add_command(label="Кто быстрее", command=s.reaction)
+        play.add_separator()
+        play.add_command(label="Ко мне", command=s.come)
+        play.add_command(label="Уснуть", command=s.sleep)
+        m.add_cascade(label="🎾 Поиграть", menu=play)
+
+        work = sub()
+        work.add_command(label=f"Список дел ({len(s.notes)})", command=s.notes_window)
+        work.add_command(label="Помодоро: стоп" if s.pomo else "Помодоро 25/5", command=lambda: s.pomodoro(stop=bool(s.pomo)))
+        if s.reminders:
+            work.add_command(label="Отменить все напоминания", command=s.cancel_timers)
+        work.add_command(label="История буфера…", command=s.clips_window)
+        work.add_separator()
+        work.add_command(label="Бульдозер: свернуть всё", command=lambda: s.start_dozer("minimize"))
+        work.add_command(label="Сфоткать экран", command=s.photo)
+        work.add_command(label="Открыть фотки", command=s.open_photos)
+        work.add_command(label="Как там комп?", command=lambda: s.say(s.stats.summary(), 8))
+        m.add_cascade(label="📋 Дела", menu=work)
+
+        look = sub()
+        wear = tk.Menu(look, tearoff=0)
+        for k, v in HATS.items():
+            wear.add_radiobutton(label=v, value=k, variable=s.hat_var, command=lambda k=k: s.set_hat(k))
+        look.add_cascade(label="Гардероб", menu=wear)
+        snow = tk.Menu(look, tearoff=0)
+        for k, v in (("auto", "Только зимой"), ("on", "Включить"), ("off", "Выключить")):
+            snow.add_radiobutton(label=v, value=k, variable=s.snow_var, command=lambda k=k: s.set_snow(k))
+        look.add_cascade(label="Снег", menu=snow)
+        look.add_command(label="Душа Клодика (характер, дневник, сны)…", command=s.soul_window)
+        m.add_cascade(label="🎩 Внешность и характер", menu=look)
+
+        voice = sub()
+        voice.add_checkbutton(label="Слушать «Клодик»", variable=s.listen_var, command=lambda: s.set_listen(s.listen_var.get()))
+        voice.add_checkbutton(label="Говорить вслух", variable=s.tts_var, command=lambda: s.set_tts(s.tts_var.get()))
+        who = tk.Menu(voice, tearoff=0)
+        for k, v in VOICES.items():
+            who.add_radiobutton(label=v, value=k, variable=s.voice_var, command=lambda k=k: s.set_voice(k))
+        voice.add_cascade(label="Чей голос", menu=who)
+        vol = tk.Menu(voice, tearoff=0)
+        for v in (20, 30, 40, 60, 80, 100):
+            vol.add_radiobutton(label=f"{v}%", value=v, variable=s.vol_var, command=lambda v=v: s.set_volume(v))
+        voice.add_cascade(label="Громкость", menu=vol)
+        voice.add_command(label="Подстроить уши под мой голос", command=s.calibrate)
+        m.add_cascade(label="🎤 Голос", menu=voice)
+
+        st = sub()
+        st.add_command(label="Что я умею (каталог команд)…", command=s.catalog)
+        st.add_command(label="Настройки…", command=s.open_settings)
+        st.add_cascade(label="Функции (вкл/выкл)", menu=s.feature_menu(st))
+        safety = tk.Menu(st, tearoff=0)
         for k, v in LEVELS.items():
             safety.add_radiobutton(label=v, value=k, variable=s.level_var, command=lambda k=k: s.set_level(k))
         safety.add_separator()
         safety.add_command(label="Журнал действий…", command=s.journal_window)
         safety.add_command(label="Открыть файл политики", command=lambda: s.fx.start(POLICY_FILE))
-        m.add_cascade(label="Доступ и безопасность", menu=safety)
-        m.add_cascade(label="Функции (вкл/выкл)", menu=s.feature_menu(m))
-        pl = tk.Menu(m, tearoff=0)
+        st.add_cascade(label="Доступ и безопасность", menu=safety)
+        brain = tk.Menu(st, tearoff=0)
+        for k, v in BRAINS.items():
+            brain.add_radiobutton(label=v, value=k, variable=s.brain_var, command=lambda k=k: s.set_brain(k))
+        brain.add_separator()
         for man in s.plugins:
             v = tk.BooleanVar(value=man.get("enabled", True))
 
             def flip(man=man, v=v):
                 man["enabled"] = v.get()
                 write_json(os.path.join(man["dir"], "plugin.json"), {k: x for k, x in man.items() if k != "dir"})
-            pl.add_checkbutton(label=f"{man['name']} — {man.get('description', '')[:40]}", variable=v, command=flip)
-        if s.plugins:
-            pl.add_separator()
-        pl.add_command(label="Как написать: скажи «напиши плагин, который …»", state="disabled")
-        pl.add_command(label="Правила из поправок…", command=lambda: s.say(
+            brain.add_checkbutton(label=f"Плагин: {man['name']}", variable=v, command=flip)
+        brain.add_command(label="Правила из поправок…", command=lambda: s.say(
             "Правила:\n" + "\n".join(r["text"] for r in s.rules) if s.rules else "Правил пока нет.", 8))
-        pl.add_command(label="Недельный отчёт", command=s.weekly_report)
-        m.add_cascade(label="Мозг: плагины и правила", menu=pl)
-        me = tk.Menu(m, tearoff=0)
+        brain.add_command(label="Недельный отчёт", command=s.weekly_report)
+        brain.add_command(label="Что ты умеешь запускать?", command=s.what_can_run)
+        if s.learned:
+            brain.add_command(label=f"Забыть выученное ({len(s.learned)})", command=s.forget)
+        st.add_cascade(label="Мозг и плагины", menu=brain)
+        me = tk.Menu(st, tearoff=0)
         me.add_command(label="Знакомство и подключения…", command=s.onboarding)
         me.add_command(label="Что ты обо мне знаешь…", command=s.recall_window)
-        me.add_command(label="Импорт памяти…", command=s.memory_import_window)
+        me.add_command(label="Импорт памяти…", command=lambda: s.memory_import_window(
+            parse_facts(open(SEED, encoding="utf-8").read()) if os.path.exists(SEED) else None))
         me.add_command(label="Экспорт памяти", command=s.memory_export)
-        me.add_command(label="Душа Клодика (характер, дневник, сны)…", command=s.soul_window)
         me.add_command(label="Сохранить копию всех данных", command=s.export_data)
-        m.add_cascade(label=f"Обо мне{', ' + s.addr() if s.addr() else ''}", menu=me)
-        m.add_command(label=f"Список дел ({len(s.notes)})", command=s.notes_window)
-        m.add_command(label="История буфера…", command=s.clips_window)
-        m.add_command(label="Что я умею (каталог команд)…", command=s.catalog)
-        m.add_command(label="Помодоро: стоп" if s.pomo else "Помодоро 25/5", command=lambda: s.pomodoro(stop=bool(s.pomo)))
-        m.add_command(label="Покормить", command=s.feed)
-        m.add_command(label="Убрать мячик" if s.ball else "Мячик", command=s.toggle_ball)
-        m.add_command(label="Прогнать друга" if s.buddy else "Позвать друга",
-                      command=s.dismiss_buddy if s.buddy else s.call_buddy)
-        m.add_command(label="Спрыгнуть с окна" if s.surface else "Залезть на окно",
-                      command=s.drop if s.surface else lambda: s.try_climb() or s.say("Некуда залезть", 2))
-        m.add_command(label="Бульдозер: свернуть всё", command=lambda: s.start_dozer("minimize"))
-        m.add_command(label="Сфоткать экран", command=s.photo)
-        m.add_command(label="Открыть фотки", command=s.open_photos)
-        m.add_command(label="Как там комп?", command=lambda: s.say(s.stats.summary(), 8))
-        wear = tk.Menu(m, tearoff=0)
-        for k, v in HATS.items():
-            wear.add_radiobutton(label=v, value=k, variable=s.hat_var, command=lambda k=k: s.set_hat(k))
-        m.add_cascade(label="Гардероб", menu=wear)
-        snow = tk.Menu(m, tearoff=0)
-        for k, v in (("auto", "Только зимой"), ("on", "Включить"), ("off", "Выключить")):
-            snow.add_radiobutton(label=v, value=k, variable=s.snow_var, command=lambda k=k: s.set_snow(k))
-        m.add_cascade(label="Снег", menu=snow)
-        brain = tk.Menu(m, tearoff=0)
-        for k, v in BRAINS.items():
-            brain.add_radiobutton(label=v, value=k, variable=s.brain_var, command=lambda k=k: s.set_brain(k))
-        m.add_cascade(label="Мозг для болтовни", menu=brain)
-        m.add_checkbutton(label="Слушать «Клодик» (микрофон, офлайн)", variable=s.listen_var,
-                          command=lambda: s.set_listen(s.listen_var.get()))
-        m.add_checkbutton(label="Говорить вслух", variable=s.tts_var, command=lambda: s.set_tts(s.tts_var.get()))
-        voice = tk.Menu(m, tearoff=0)
-        for k, v in VOICES.items():
-            voice.add_radiobutton(label=v, value=k, variable=s.voice_var, command=lambda k=k: s.set_voice(k))
-        voice.add_separator()
-        for v in (20, 30, 40, 60, 80, 100):
-            voice.add_radiobutton(label=f"Громкость {v}%", value=v, variable=s.vol_var, command=lambda v=v: s.set_volume(v))
-        m.add_cascade(label="Голос Клодика", menu=voice)
-        m.add_command(label="Подстроить уши под мой голос", command=s.calibrate)
-        m.add_command(label="Что ты умеешь запускать?", command=s.what_can_run)
-        if s.learned:
-            m.add_command(label=f"Забыть выученное ({len(s.learned)})", command=s.forget)
+        st.add_cascade(label="Обо мне и память", menu=me)
+        m.add_cascade(label="⚙ Настройки", menu=st)
+
         m.add_separator()
-        m.add_command(label="Уснуть", command=s.sleep)
-        m.add_command(label="Ко мне", command=s.come)
         m.add_command(label="Выход", command=s.quit)
         m.tk_popup(e.x_root, e.y_root)
 
