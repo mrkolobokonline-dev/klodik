@@ -467,7 +467,9 @@ class PetOnboard:
                                                                              "в «Знакомство»."), 4, speak=True)
             return go
         if re.search(r"импорт\w* памят", seg):
-            return lambda: s.memory_import_window()
+            # есть стартовая память — сразу показать её факты с галочками; сохранится только отмеченное
+            return lambda: s.memory_import_window(parse_facts(open(SEED, encoding="utf-8").read())
+                                                  if os.path.exists(SEED) else None)
         if re.search(r"экспорт\w* памят", seg):
             return s.memory_export
         return None
